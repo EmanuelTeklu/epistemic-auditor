@@ -57,25 +57,6 @@ function buildSources(groundingSources, resultUrls = []) {
   return sources;
 }
 
-// Robust JSON extraction from model response
-function parseJSONResponse(text) {
-  const trimmed = text.trim();
-  try { return JSON.parse(trimmed); } catch { /* continue */ }
-
-  const codeBlock = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (codeBlock) {
-    try { return JSON.parse(codeBlock[1].trim()); } catch { /* continue */ }
-  }
-
-  const start = trimmed.indexOf('{');
-  const end = trimmed.lastIndexOf('}');
-  if (start !== -1 && end > start) {
-    try { return JSON.parse(trimmed.slice(start, end + 1)); } catch { /* continue */ }
-  }
-
-  throw new Error('Analysis temporarily unavailable. Please try again in a moment.');
-}
-
 function isRateLimited(err) {
   return err?.status === 429
     || err?.httpStatusCode === 429
@@ -85,17 +66,18 @@ function isRateLimited(err) {
 
 // --- Prompts ---
 
-const AUDIT_PROMPT = `You are an epistemic auditor. Given a claim, research it thoroughly using search, then return a structured JSON analysis.
+const RESEARCH_PROMPT = `You are an epistemic auditor. Given a claim, you must:
 
-Your task:
-1. Decompose the claim into 2-4 distinct, testable sub-claims
-2. For each sub-claim, find specific credible evidence FOR and AGAINST it
-3. Evaluate the confidence level for each sub-claim
-4. Provide an overall epistemic strength assessment
-5. Write a 2-3 sentence summary
-6. Identify 4-6 related concepts from epistemology, economics, or cognitive science
+1. Decompose the claim into 2-4 distinct, testable sub-claims.
+2. For each sub-claim, search for credible evidence FOR and AGAINST it.
+3. Cite specific sources with URLs where available.
+4. Evaluate the strength of evidence on each side.
+5. Provide an overall assessment of the claim's epistemic strength.
+6. Identify 4-6 key concepts related to this claim.
 
-You MUST return ONLY a valid JSON object (no markdown, no code blocks, no extra text):
+Be thorough, balanced, and cite specific data points and sources.`;
+
+const EXTRACTION_PROMPT = `Extract the epistemic analysis into this exact JSON structure. Return ONLY valid JSON:
 
 {
   "claim": "the original claim text",
@@ -116,10 +98,10 @@ You MUST return ONLY a valid JSON object (no markdown, no code blocks, no extra 
 Rules:
 - confidence per sub-claim must be exactly "High", "Moderate", or "Low"
 - overall_score must be exactly "Strong", "Moderate", "Weak", or "Unsupported"
-- Include ALL source URLs you reference
-- evidence arrays should have concrete, specific items with citations
-- related_concepts should be 4-6 key concepts
-- Return ONLY the JSON object, nothing else`;
+- Include ALL source URLs from the analysis
+- evidence arrays should have concrete, specific items
+- related_concepts should be 4-6 key concepts mentioned or relevant to the analysis
+- Extract faithfully from the provided text`;
 
 const GO_DEEPER_PROMPTS = {
   steelman: `You are an epistemic analyst. Given a claim, construct the strongest possible version of it (the "steel man"). Find the best evidence, most favorable interpretations, and most credible supporters. Present the strongest case FOR the claim. Be thorough, cite sources, and keep your response to 3-4 paragraphs.`,
@@ -129,67 +111,85 @@ const GO_DEEPER_PROMPTS = {
 
 // --- Public API ---
 
+async function withRetry(fn, onRetryStatus) {
+  try {
+    return await fn();
+  } catch (err) {
+    if (isRateLimited(err)) {
+      if (onRetryStatus) onRetryStatus('Rate limited — retrying in 3s...');
+      await new Promise(r => setTimeout(r, 3000));
+      return await fn();
+    }
+    throw err;
+  }
+}
+
 export async function runAudit(input, { onThought, onStatus }) {
   const client = getClient();
 
-  const doCall = async () => {
-    onStatus('Researching with Google Search...');
+  try {
+    // Step 1: Stream with grounding + thoughts
+    const { groundedText, groundingSources } = await withRetry(async () => {
+      onStatus('Researching with Google Search...');
+      let text = '';
+      const sources = [];
 
-    let responseText = '';
-    const groundingSources = [];
+      const stream = await client.models.generateContentStream({
+        model: MODEL,
+        contents: [{ role: 'user', parts: [{ text: `Analyze this claim: "${input}"` }] }],
+        config: {
+          systemInstruction: RESEARCH_PROMPT,
+          tools: [{ googleSearch: {} }],
+          thinkingConfig: { includeThoughts: true },
+        },
+      });
 
-    const stream = await client.models.generateContentStream({
-      model: MODEL,
-      contents: [{ role: 'user', parts: [{ text: `Analyze this claim: "${input}"` }] }],
-      config: {
-        systemInstruction: AUDIT_PROMPT,
-        tools: [{ googleSearch: {} }],
-        thinkingConfig: { includeThoughts: true },
-      },
-    });
-
-    for await (const chunk of stream) {
-      const candidate = chunk.candidates?.[0];
-      if (candidate?.content?.parts) {
-        for (const part of candidate.content.parts) {
-          if (part.thought && part.text) {
-            onThought(part.text);
-          } else if (part.text) {
-            responseText += part.text;
+      for await (const chunk of stream) {
+        const candidate = chunk.candidates?.[0];
+        if (candidate?.content?.parts) {
+          for (const part of candidate.content.parts) {
+            if (part.thought && part.text) {
+              onThought(part.text);
+            } else if (part.text) {
+              text += part.text;
+            }
+          }
+        }
+        const gm = candidate?.groundingMetadata;
+        if (gm?.groundingChunks) {
+          for (const gc of gm.groundingChunks) {
+            if (gc.web?.uri) {
+              sources.push({ url: gc.web.uri, title: gc.web.title || '' });
+            }
           }
         }
       }
-      const gm = candidate?.groundingMetadata;
-      if (gm?.groundingChunks) {
-        for (const gc of gm.groundingChunks) {
-          if (gc.web?.uri) {
-            groundingSources.push({ url: gc.web.uri, title: gc.web.title || '' });
-          }
-        }
-      }
-    }
 
-    if (!responseText.trim()) {
-      throw new Error('Analysis temporarily unavailable. Please try again in a moment.');
-    }
+      if (!text.trim()) throw new Error('No research data received.');
+      return { groundedText: text, groundingSources: sources };
+    }, (msg) => onStatus(msg));
 
-    onStatus('Processing results...');
-    const result = parseJSONResponse(responseText);
+    // Step 2: Extract structured JSON
+    const result = await withRetry(async () => {
+      onStatus('Extracting structured analysis...');
+      const response = await client.models.generateContent({
+        model: MODEL,
+        contents: [
+          { role: 'user', parts: [{ text: `Extract the following analysis into structured JSON:\n\n${groundedText}` }] },
+        ],
+        config: {
+          systemInstruction: EXTRACTION_PROMPT,
+          responseMimeType: 'application/json',
+        },
+      });
+      return JSON.parse(response.text);
+    }, (msg) => onStatus(msg));
+
     result.sources = buildSources(groundingSources, result.source_urls);
     result.source_urls = result.sources.map(s => s.url);
-
     onStatus('Complete.');
     return result;
-  };
-
-  try {
-    return await doCall();
-  } catch (err) {
-    if (isRateLimited(err)) {
-      onStatus('Rate limited — retrying in 3s...');
-      await new Promise(r => setTimeout(r, 3000));
-      return await doCall();
-    }
+  } catch {
     throw new Error('Analysis temporarily unavailable. Please try again in a moment.');
   }
 }
@@ -197,25 +197,19 @@ export async function runAudit(input, { onThought, onStatus }) {
 export async function runGoDeeper(type, claim) {
   const client = getClient();
 
-  const doCall = async () => {
-    const response = await client.models.generateContent({
-      model: MODEL,
-      contents: [{ role: 'user', parts: [{ text: `Regarding this claim: "${claim}"` }] }],
-      config: {
-        systemInstruction: GO_DEEPER_PROMPTS[type],
-        tools: [{ googleSearch: {} }],
-      },
-    });
-    return response.text;
-  };
-
   try {
-    return await doCall();
-  } catch (err) {
-    if (isRateLimited(err)) {
-      await new Promise(r => setTimeout(r, 3000));
-      return await doCall();
-    }
+    return await withRetry(async () => {
+      const response = await client.models.generateContent({
+        model: MODEL,
+        contents: [{ role: 'user', parts: [{ text: `Regarding this claim: "${claim}"` }] }],
+        config: {
+          systemInstruction: GO_DEEPER_PROMPTS[type],
+          tools: [{ googleSearch: {} }],
+        },
+      });
+      return response.text;
+    });
+  } catch {
     throw new Error('Analysis temporarily unavailable. Please try again in a moment.');
   }
 }
