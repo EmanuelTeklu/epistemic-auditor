@@ -4,10 +4,10 @@ import { runAudit, runDefinition, runGoDeeper } from './api';
 // --- Utilities ---
 
 const SCORE_COLORS = {
-  Strong: { bg: 'bg-emerald-500/20', border: 'border-emerald-500/40', text: 'text-emerald-400', glow: 'rgba(52, 211, 153, 0.1)' },
-  Moderate: { bg: 'bg-amber-500/20', border: 'border-amber-500/40', text: 'text-amber-400', glow: 'rgba(245, 158, 11, 0.1)' },
-  Weak: { bg: 'bg-orange-500/20', border: 'border-orange-500/40', text: 'text-orange-400', glow: 'rgba(249, 115, 22, 0.1)' },
-  Unsupported: { bg: 'bg-red-500/20', border: 'border-red-500/40', text: 'text-red-400', glow: 'rgba(239, 68, 68, 0.1)' },
+  Strong: { text: 'text-emerald-400', glow: 'rgba(52, 211, 153, 0.1)', bg: 'bg-emerald-500/10' },
+  Moderate: { text: 'text-amber-400', glow: 'rgba(245, 158, 11, 0.1)', bg: 'bg-amber-500/10' },
+  Weak: { text: 'text-orange-400', glow: 'rgba(249, 115, 22, 0.1)', bg: 'bg-orange-500/10' },
+  Unsupported: { text: 'text-red-400', glow: 'rgba(239, 68, 68, 0.1)', bg: 'bg-red-500/10' },
 };
 
 const SCORE_VERDICTS = {
@@ -51,9 +51,9 @@ const EXAMPLE_CONCEPTS = [
 ];
 
 const PLACEHOLDER_BY_MODE = {
-  claim: 'Paste a claim to audit, e.g. "Global temperatures will rise 2\u00B0C by 2030"',
-  forecast: 'Enter a probability forecast, e.g. "70% chance China invades Taiwan by 2030"',
-  definition: 'Enter a concept to explore, e.g. "moral hazard" or "herd immunity"',
+  claim: 'Paste a claim to audit, e.g. \u201cGlobal temperatures will rise 2\u00B0C by 2030\u201d',
+  forecast: 'Enter a probability forecast, e.g. \u201c70% chance China invades Taiwan by 2030\u201d',
+  definition: 'Enter a concept to explore, e.g. \u201cmoral hazard\u201d or \u201cherd immunity\u201d',
 };
 
 const BUTTON_LABEL = { claim: 'Run Audit', forecast: 'Analyze Forecast', definition: 'Explore Concept' };
@@ -63,6 +63,18 @@ const THOUGHT_SCHEDULE = [2000, 5000, 9000, 14000];
 const THOUGHT_TIMESTAMPS = ['0:02', '0:05', '0:09', '0:14'];
 
 // --- Small Components ---
+
+function SocratesIcon() {
+  return (
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" className="text-zinc-400">
+      <path
+        d="M10 5Q14 1 18 5L18 9 21 12Q20 13.5 18 14Q17 17 15 19Q12 20 11 17L10 14Q9 10 10 5Z"
+        stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+      />
+      <path d="M7 25Q10 22 14 22Q18 22 21 25" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 function Spinner() {
   return (
@@ -94,7 +106,7 @@ function TypewriterText({ text, speed = 30 }) {
 function ScoreBadge({ score }) {
   const colors = SCORE_COLORS[score] || SCORE_COLORS.Unsupported;
   return (
-    <span className={`inline-flex items-center px-5 py-2 rounded-full text-lg font-bold border ${colors.bg} ${colors.border} ${colors.text}`}>
+    <span className={`inline-flex items-center px-6 py-2.5 rounded-full text-lg font-bold ${colors.bg} ${colors.text}`}>
       {score}
     </span>
   );
@@ -110,15 +122,15 @@ const INPUT_MODES = [
 
 function InputModePills({ mode, setMode }) {
   return (
-    <div className="flex gap-1.5">
+    <div className="flex gap-2">
       {INPUT_MODES.map(m => (
         <button
           key={m.key}
           onClick={() => setMode(m.key)}
-          className={`px-3 py-1 text-xs font-medium rounded-full transition-all cursor-pointer ${
+          className={`tactile min-h-10 px-4 py-2 text-xs font-medium rounded-full cursor-pointer ${
             mode === m.key
-              ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/40'
-              : 'text-zinc-500 border border-zinc-800 hover:text-zinc-300 hover:border-zinc-700'
+              ? 'bg-indigo-600/20 text-indigo-300'
+              : 'bg-zinc-900/40 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'
           }`}
         >
           {m.label}
@@ -132,23 +144,23 @@ function InputModePills({ mode, setMode }) {
 
 function ClaimInput({ claim, setClaim, onSubmit, loading, mode, setMode }) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <InputModePills mode={mode} setMode={setMode} />
       <textarea
         value={claim}
         onChange={(e) => setClaim(e.target.value)}
         placeholder={PLACEHOLDER_BY_MODE[mode]}
-        className="textarea-premium w-full h-32 bg-zinc-900/60 border border-zinc-700/80 rounded-xl p-5 text-zinc-100 placeholder-zinc-600 resize-none focus:outline-none focus:border-indigo-500/70 focus:ring-1 focus:ring-indigo-500/30"
+        className="textarea-premium w-full h-32 bg-zinc-900/50 rounded-2xl p-6 text-zinc-100 placeholder-zinc-600 resize-none focus:outline-none"
         disabled={loading}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) onSubmit();
         }}
       />
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-4">
         <button
           onClick={onSubmit}
           disabled={loading || !claim.trim()}
-          className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white font-medium rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed"
+          className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-medium rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed"
         >
           {loading ? (
             <span className="flex items-center gap-2">
@@ -171,30 +183,30 @@ function ClaimInput({ claim, setClaim, onSubmit, loading, mode, setMode }) {
 
 function EmptyState({ onSelect }) {
   return (
-    <div className="text-center py-12">
-      <p className="text-zinc-500 text-sm italic mb-6 tracking-wide">
+    <div className="text-center py-16">
+      <p className="text-zinc-500 text-sm italic mb-8 tracking-wide">
         No claim is too sacred to question.
       </p>
-      <div className="space-y-3 max-w-lg mx-auto mb-10">
+      <div className="space-y-3 max-w-lg mx-auto mb-12">
         {EXAMPLE_CLAIMS.map((claim, i) => (
           <button
             key={i}
             onClick={() => onSelect(claim, 'claim')}
-            className="claim-card-glow block w-full text-left px-5 py-4 bg-zinc-900/50 border border-zinc-800 rounded-xl text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 hover:border-zinc-700 cursor-pointer text-sm leading-relaxed"
+            className="tactile block w-full text-left px-6 py-5 bg-zinc-900/40 rounded-2xl text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60 cursor-pointer text-sm leading-loose min-h-12"
           >
             &ldquo;{claim}&rdquo;
           </button>
         ))}
       </div>
-      <p className="text-zinc-600 text-xs uppercase tracking-wider mb-3">
+      <p className="text-zinc-600 text-xs mb-4">
         Or explore a concept
       </p>
-      <div className="flex justify-center gap-2">
+      <div className="flex justify-center gap-3">
         {EXAMPLE_CONCEPTS.map((concept, i) => (
           <button
             key={i}
             onClick={() => onSelect(concept, 'definition')}
-            className="px-3 py-1.5 text-xs font-medium text-zinc-500 border border-zinc-800 rounded-full hover:text-zinc-200 hover:border-indigo-500/40 hover:shadow-[0_0_12px_-3px_rgba(99,102,241,0.2)] transition-all cursor-pointer"
+            className="tactile px-4 py-2.5 text-xs font-medium text-zinc-500 bg-zinc-900/30 rounded-full hover:text-zinc-200 hover:bg-zinc-800/50 cursor-pointer min-h-10"
           >
             {concept}
           </button>
@@ -210,7 +222,7 @@ function ThoughtEntry({ thought, index }) {
   const label = `[${String(index + 1).padStart(2, '0')} \u00B7 ${thought.timestamp}s]`;
 
   return (
-    <div className="thought-slide-in border-b border-emerald-900/15 last:border-b-0">
+    <div className="thought-slide-in">
       <div className="flex items-start gap-2.5 py-3 px-1">
         <span className="text-emerald-600/60 font-mono text-[10px] shrink-0 pt-px select-none">
           {label}
@@ -233,18 +245,18 @@ function SocraticProcess({ thoughts, status, active, complete }) {
   }, [thoughts, status]);
 
   return (
-    <div className={`flex flex-col h-full bg-zinc-950/80 transition-opacity duration-700 ${complete && !active ? 'opacity-40' : ''}`}>
-      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-emerald-900/20 shrink-0">
+    <div className={`flex flex-col h-full bg-zinc-950/90 backdrop-blur-sm transition-opacity duration-700 ${complete && !active ? 'opacity-40' : ''}`}>
+      <div className="flex items-center gap-2.5 px-5 py-4 shrink-0">
         {active ? (
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-orb-pulse shrink-0" />
         ) : (
           <span className="w-2 h-2 rounded-full bg-zinc-700 shrink-0" />
         )}
-        <h2 className="text-[11px] font-semibold font-mono text-emerald-500/70 uppercase tracking-widest">
+        <h2 className="text-[11px] font-medium font-mono text-emerald-500/60">
           Socratic Process
         </h2>
       </div>
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 min-h-0">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 min-h-0">
         {thoughts.length === 0 && !active && !complete && (
           <div className="flex items-center gap-1.5 py-4 px-1">
             <span className="text-emerald-700/50 text-xs font-mono">
@@ -263,7 +275,7 @@ function SocraticProcess({ thoughts, status, active, complete }) {
           </div>
         )}
         {complete && !active && thoughts.length > 0 && (
-          <div className="thought-slide-in py-3 px-1">
+          <div className="thought-slide-in py-4 px-1">
             <span className="text-emerald-600/50 text-[11px] font-mono">Analysis complete</span>
           </div>
         )}
@@ -279,21 +291,21 @@ function SubClaimCard({ subClaim, index }) {
   const confidenceColor = CONFIDENCE_COLORS[subClaim.confidence] || 'text-zinc-400';
 
   return (
-    <div className="card-glow border border-zinc-800 rounded-xl overflow-hidden">
+    <div className="card-elevated bg-zinc-900/40 rounded-2xl overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between p-4 text-left hover:bg-zinc-800/40 transition-colors cursor-pointer"
+        className="w-full flex items-center justify-between p-6 text-left hover:bg-zinc-800/30 transition-colors cursor-pointer"
       >
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-4 min-w-0">
           <span className="text-zinc-600 text-sm font-mono shrink-0">
             {String(index + 1).padStart(2, '0')}
           </span>
-          <span className="text-zinc-200 font-medium truncate">{subClaim.title}</span>
+          <span className="text-zinc-200 font-normal truncate">{subClaim.title}</span>
         </div>
-        <div className="flex items-center gap-3 shrink-0 ml-3">
+        <div className="flex items-center gap-4 shrink-0 ml-4">
           <span className={`text-xs font-medium ${confidenceColor}`}>{subClaim.confidence}</span>
           <svg
-            className={`w-4 h-4 text-zinc-500 transition-transform ${expanded ? 'rotate-180' : ''}`}
+            className={`w-4 h-4 text-zinc-600 transition-transform ${expanded ? 'rotate-180' : ''}`}
             fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
           >
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -301,13 +313,13 @@ function SubClaimCard({ subClaim, index }) {
         </div>
       </button>
       {expanded && (
-        <div className="px-4 pb-4 space-y-4 border-t border-zinc-800/50">
-          <div className="pt-3">
-            <h4 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-2">Evidence For</h4>
+        <div className="px-6 pb-6 space-y-5 bg-zinc-900/20">
+          <div className="pt-4">
+            <h4 className="text-sm font-normal text-emerald-400/80 mb-3">Evidence for</h4>
             {subClaim.evidence_for?.length > 0 ? (
-              <ul className="space-y-1.5">
+              <ul className="space-y-2">
                 {subClaim.evidence_for.map((e, i) => (
-                  <li key={i} className="text-sm text-zinc-300 flex items-start gap-2">
+                  <li key={i} className="text-sm text-zinc-300 leading-loose flex items-start gap-2">
                     <span className="text-emerald-500 shrink-0 mt-1">+</span>
                     <span>{e}</span>
                   </li>
@@ -318,11 +330,11 @@ function SubClaimCard({ subClaim, index }) {
             )}
           </div>
           <div>
-            <h4 className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-2">Evidence Against</h4>
+            <h4 className="text-sm font-normal text-red-400/80 mb-3">Evidence against</h4>
             {subClaim.evidence_against?.length > 0 ? (
-              <ul className="space-y-1.5">
+              <ul className="space-y-2">
                 {subClaim.evidence_against.map((e, i) => (
-                  <li key={i} className="text-sm text-zinc-300 flex items-start gap-2">
+                  <li key={i} className="text-sm text-zinc-300 leading-loose flex items-start gap-2">
                     <span className="text-red-500 shrink-0 mt-1">&minus;</span>
                     <span>{e}</span>
                   </li>
@@ -357,14 +369,14 @@ function SourcesList({ sources }) {
 
   return (
     <div>
-      <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">
+      <h3 className="text-sm font-normal text-zinc-500 mb-4">
         Sources ({sources.length})
       </h3>
-      <div className="card-glow bg-zinc-900/40 border border-zinc-800 rounded-xl p-5">
-        <ul className="space-y-2">
+      <div className="card-elevated bg-zinc-900/30 rounded-2xl p-7">
+        <ul className="space-y-2.5">
           {visible.map(([label, groupSources]) => (
             <li key={label} className="text-sm flex items-center gap-2">
-              <span className="text-zinc-600 text-xs">&bull;</span>
+              <span className="text-zinc-700 text-xs">&bull;</span>
               <a
                 href={groupSources[0].url}
                 target="_blank"
@@ -382,7 +394,7 @@ function SourcesList({ sources }) {
         {hasMore && (
           <button
             onClick={() => setShowAll(!showAll)}
-            className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer pt-3 block"
+            className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer pt-4 block"
           >
             {showAll ? 'Show fewer' : `Show all ${groups.length} sources`}
           </button>
@@ -399,15 +411,15 @@ function ConceptMap({ concepts, onConceptClick }) {
 
   return (
     <div>
-      <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">
+      <h3 className="text-sm font-normal text-zinc-500 mb-4">
         Related concepts
       </h3>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-3">
         {concepts.map((concept, i) => (
           <button
             key={i}
             onClick={() => onConceptClick(concept)}
-            className="px-3 py-1.5 text-xs font-medium text-zinc-400 border border-zinc-700/80 rounded-full hover:text-zinc-200 hover:border-indigo-500/40 hover:shadow-[0_0_12px_-3px_rgba(99,102,241,0.2)] transition-all cursor-pointer"
+            className="tactile px-4 py-2.5 text-xs font-medium text-zinc-400 bg-zinc-900/30 rounded-full hover:text-zinc-200 hover:bg-zinc-800/50 cursor-pointer min-h-10"
           >
             {concept}
           </button>
@@ -448,22 +460,22 @@ function GoDeeper({ claim }) {
     const active = GO_DEEPER_CARDS.find(c => c.type === activeType);
     return (
       <div>
-        <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">
+        <h3 className="text-sm font-normal text-zinc-500 mb-4">
           {active.icon} {active.title}
         </h3>
-        <div className="card-glow bg-zinc-900/40 border border-zinc-800 rounded-xl p-5">
+        <div className="card-elevated bg-zinc-900/30 rounded-2xl p-8">
           {loading ? (
-            <div className="flex items-center gap-2 text-zinc-400 text-sm">
+            <div className="flex items-center gap-3 text-zinc-400 text-sm">
               <Spinner /> Researching...
             </div>
           ) : (
             <>
-              <div className="text-sm text-zinc-300 leading-relaxed whitespace-pre-line">
+              <div className="text-sm text-zinc-300 leading-loose whitespace-pre-line">
                 {result}
               </div>
               <button
                 onClick={() => { setActiveType(null); setResult(''); }}
-                className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer mt-4 block"
+                className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer mt-6 block"
               >
                 &larr; Back to options
               </button>
@@ -476,19 +488,19 @@ function GoDeeper({ claim }) {
 
   return (
     <div>
-      <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">
+      <h3 className="text-sm font-normal text-zinc-500 mb-4">
         Continue the inquiry
       </h3>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {GO_DEEPER_CARDS.map(card => (
           <button
             key={card.type}
             onClick={() => handleClick(card.type)}
-            className="card-glow text-left p-4 bg-zinc-900/40 border border-zinc-800 rounded-xl hover:bg-zinc-800/50 cursor-pointer transition-colors"
+            className="tactile text-left p-6 bg-zinc-900/30 rounded-2xl hover:bg-zinc-900/50 cursor-pointer min-h-12"
           >
-            <span className="text-lg mb-2 block">{card.icon}</span>
-            <p className="text-sm font-medium text-zinc-200 mb-1">{card.title}</p>
-            <p className="text-xs text-zinc-500">{card.desc}</p>
+            <span className="text-lg mb-3 block">{card.icon}</span>
+            <p className="text-sm font-normal text-zinc-200 mb-1">{card.title}</p>
+            <p className="text-xs text-zinc-500 leading-relaxed">{card.desc}</p>
           </button>
         ))}
       </div>
@@ -505,31 +517,28 @@ function ClaimDashboard({ result }) {
   const verdict = SCORE_VERDICTS[result.overall_score] || '';
 
   return (
-    <div className="space-y-8">
-      <div className="card-glow bg-zinc-900/40 border border-zinc-800 rounded-xl p-6">
-        <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Claim Under Review</p>
-        <p className="text-zinc-100 text-lg leading-relaxed">&ldquo;{result.claim}&rdquo;</p>
-      </div>
-
+    <div className="space-y-12">
+      {/* Epistemic Health */}
       <div
-        className={`border rounded-xl p-6 ${colors.border}`}
-        style={{ background: `linear-gradient(135deg, ${colors.glow} 0%, rgba(24, 24, 27, 0.8) 100%)` }}
+        className="rounded-2xl p-8"
+        style={{ background: `linear-gradient(135deg, ${colors.glow} 0%, rgba(24, 24, 27, 0.6) 100%)` }}
       >
-        <div className="flex items-start justify-between gap-6">
+        <div className="flex items-start justify-between gap-8">
           <div className="flex-1">
-            <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Epistemic Health</p>
-            <p className="text-zinc-300 text-base leading-relaxed max-w-xl mb-3">{result.summary}</p>
-            {verdict && <p className={`text-sm font-medium ${colors.text} italic`}>{verdict}</p>}
+            <p className="text-sm font-normal text-zinc-500 mb-3">Epistemic health</p>
+            <p className="text-zinc-300 text-base leading-loose max-w-xl mb-4">{result.summary}</p>
+            {verdict && <p className={`text-sm font-normal ${colors.text} italic`}>{verdict}</p>}
           </div>
           <ScoreBadge score={result.overall_score} />
         </div>
       </div>
 
+      {/* Sub-claims */}
       <div>
-        <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">
+        <h3 className="text-sm font-normal text-zinc-500 mb-5">
           Sub-claims ({result.sub_claims?.length || 0})
         </h3>
-        <div className="space-y-3">
+        <div className="space-y-4">
           {result.sub_claims?.map((sc, i) => (
             <SubClaimCard key={i} subClaim={sc} index={i} />
           ))}
@@ -550,58 +559,57 @@ function ForecastDashboard({ result, onConceptClick }) {
   const verdict = SCORE_VERDICTS[result.overall_score] || '';
 
   return (
-    <div className="space-y-8">
-      <div className="card-glow bg-zinc-900/40 border border-zinc-800 rounded-xl p-6">
-        <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Forecast Under Review</p>
-        <p className="text-zinc-100 text-lg leading-relaxed">&ldquo;{result.forecast}&rdquo;</p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="card-glow bg-zinc-900/40 border border-zinc-800 rounded-xl p-5 text-center">
-          <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Stated</p>
-          <p className="text-3xl font-bold text-zinc-100">{result.stated_probability || '\u2014'}</p>
+    <div className="space-y-12">
+      {/* Probability comparison */}
+      <div className="grid grid-cols-2 gap-5">
+        <div className="card-elevated bg-zinc-900/40 rounded-2xl p-8 text-center">
+          <p className="text-sm font-normal text-zinc-500 mb-3">Stated</p>
+          <p className="text-3xl font-light text-zinc-100">{result.stated_probability || '\u2014'}</p>
         </div>
         <div
-          className={`card-glow border rounded-xl p-5 text-center ${colors.border}`}
-          style={{ background: `linear-gradient(135deg, ${colors.glow} 0%, rgba(24, 24, 27, 0.8) 100%)` }}
+          className="card-elevated rounded-2xl p-8 text-center"
+          style={{ background: `linear-gradient(135deg, ${colors.glow} 0%, rgba(24, 24, 27, 0.6) 100%)` }}
         >
-          <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Adjusted</p>
-          <p className={`text-3xl font-bold ${colors.text}`}>{result.adjusted_probability || '\u2014'}</p>
+          <p className="text-sm font-normal text-zinc-500 mb-3">Adjusted</p>
+          <p className={`text-3xl font-light ${colors.text}`}>{result.adjusted_probability || '\u2014'}</p>
         </div>
       </div>
 
-      <div className="card-glow bg-zinc-900/40 border border-zinc-800 rounded-xl p-5">
-        <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Base Rate Analysis</h3>
-        <p className="text-sm text-zinc-300 leading-relaxed">{result.base_rate_analysis}</p>
+      {/* Base rate analysis */}
+      <div className="card-elevated bg-zinc-900/30 rounded-2xl p-8">
+        <h3 className="text-sm font-normal text-zinc-500 mb-3">Base rate analysis</h3>
+        <p className="text-sm text-zinc-300 leading-loose">{result.base_rate_analysis}</p>
       </div>
 
+      {/* Reference classes */}
       {result.reference_classes?.length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">Reference Classes</h3>
-          <div className="space-y-3">
+          <h3 className="text-sm font-normal text-zinc-500 mb-5">Reference classes</h3>
+          <div className="space-y-4">
             {result.reference_classes.map((rc, i) => (
-              <div key={i} className="card-glow border border-zinc-800 rounded-xl p-4">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-sm font-medium text-zinc-200">{rc.name}</p>
+              <div key={i} className="card-elevated bg-zinc-900/30 rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-normal text-zinc-200">{rc.name}</p>
                   <span className="text-xs font-mono text-indigo-400">{rc.base_rate}</span>
                 </div>
-                <p className="text-xs text-zinc-500">{rc.relevance}</p>
+                <p className="text-xs text-zinc-500 leading-relaxed">{rc.relevance}</p>
               </div>
             ))}
           </div>
         </div>
       )}
 
+      {/* Calibration card */}
       <div
-        className={`border rounded-xl p-6 ${colors.border}`}
-        style={{ background: `linear-gradient(135deg, ${colors.glow} 0%, rgba(24, 24, 27, 0.8) 100%)` }}
+        className="rounded-2xl p-8"
+        style={{ background: `linear-gradient(135deg, ${colors.glow} 0%, rgba(24, 24, 27, 0.6) 100%)` }}
       >
-        <div className="flex items-start justify-between gap-6">
+        <div className="flex items-start justify-between gap-8">
           <div className="flex-1">
-            <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Calibration Assessment</p>
-            <p className="text-zinc-300 text-sm leading-relaxed mb-2">{result.calibration_assessment}</p>
-            <p className="text-zinc-300 text-base leading-relaxed">{result.summary}</p>
-            {verdict && <p className={`text-sm font-medium ${colors.text} italic mt-2`}>{verdict}</p>}
+            <p className="text-sm font-normal text-zinc-500 mb-3">Calibration assessment</p>
+            <p className="text-zinc-300 text-sm leading-loose mb-3">{result.calibration_assessment}</p>
+            <p className="text-zinc-300 text-base leading-loose">{result.summary}</p>
+            {verdict && <p className={`text-sm font-normal ${colors.text} italic mt-3`}>{verdict}</p>}
           </div>
           <ScoreBadge score={result.overall_score} />
         </div>
@@ -619,40 +627,43 @@ function DefinitionCard({ result, onConceptClick }) {
   if (!result) return null;
 
   return (
-    <div className="space-y-8">
-      <div className="card-glow bg-zinc-900/40 border border-zinc-800 rounded-xl p-6">
-        <p className="text-xs font-semibold text-indigo-400 uppercase tracking-wider mb-2">Definition</p>
-        <h2 className="text-xl font-semibold text-zinc-100 mb-3">{result.concept}</h2>
-        <p className="text-zinc-300 leading-relaxed">{result.definition}</p>
+    <div className="space-y-12">
+      {/* Definition */}
+      <div className="card-elevated bg-zinc-900/40 rounded-2xl p-8">
+        <p className="text-sm font-normal text-indigo-400/80 mb-3">Definition</p>
+        <h2 className="text-2xl font-light text-zinc-100 mb-4">{result.concept}</h2>
+        <p className="text-zinc-300 leading-loose">{result.definition}</p>
       </div>
 
+      {/* Key debates */}
       {result.key_debates?.length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">Key Debates</h3>
-          <div className="space-y-3">
+          <h3 className="text-sm font-normal text-zinc-500 mb-5">Key debates</h3>
+          <div className="space-y-4">
             {result.key_debates.map((debate, i) => (
-              <div key={i} className="card-glow border border-zinc-800 rounded-xl p-4">
-                <p className="text-sm font-medium text-zinc-200 mb-1">{debate.title}</p>
-                <p className="text-sm text-zinc-400">{debate.description}</p>
+              <div key={i} className="card-elevated bg-zinc-900/30 rounded-2xl p-6">
+                <p className="text-sm font-normal text-zinc-200 mb-2">{debate.title}</p>
+                <p className="text-sm text-zinc-400 leading-loose">{debate.description}</p>
               </div>
             ))}
           </div>
         </div>
       )}
 
+      {/* Misconceptions */}
       {result.common_misconceptions?.length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">Common Misconceptions</h3>
-          <div className="space-y-3">
+          <h3 className="text-sm font-normal text-zinc-500 mb-5">Common misconceptions</h3>
+          <div className="space-y-4">
             {result.common_misconceptions.map((m, i) => (
-              <div key={i} className="card-glow border border-zinc-800 rounded-xl p-4">
-                <div className="flex items-start gap-2 mb-2">
-                  <span className="text-red-400 shrink-0">&times;</span>
-                  <p className="text-sm text-zinc-300">{m.misconception}</p>
+              <div key={i} className="card-elevated bg-zinc-900/30 rounded-2xl p-6">
+                <div className="flex items-start gap-3 mb-3">
+                  <span className="text-red-400/70 shrink-0">&times;</span>
+                  <p className="text-sm text-zinc-300 leading-loose">{m.misconception}</p>
                 </div>
-                <div className="flex items-start gap-2">
-                  <span className="text-emerald-400 shrink-0">&check;</span>
-                  <p className="text-sm text-zinc-400">{m.reality}</p>
+                <div className="flex items-start gap-3">
+                  <span className="text-emerald-400/70 shrink-0">&check;</span>
+                  <p className="text-sm text-zinc-400 leading-loose">{m.reality}</p>
                 </div>
               </div>
             ))}
@@ -700,7 +711,6 @@ export default function App() {
     thoughtTimersRef.current = [];
     auditStartRef.current = Date.now();
 
-    // Schedule exactly 4 thought reveals at fixed intervals
     THOUGHT_SCHEDULE.forEach((delay, idx) => {
       const timer = setTimeout(() => {
         const raw = rawThoughtsRef.current;
@@ -751,24 +761,22 @@ export default function App() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
+    <div className="min-h-screen bg-depth text-zinc-100 flex flex-col">
       {/* Header */}
-      <header className="border-b border-zinc-800/80 px-6 py-4 shrink-0">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl" role="img" aria-label="Owl">{'\uD83E\uDD89'}</span>
-            <div>
-              <h1 className="text-lg font-semibold text-zinc-100">Epistemic Auditor</h1>
-              <p className="text-xs text-zinc-500 italic">What would Socrates ask?</p>
-            </div>
+      <header className="px-6 py-5 shrink-0">
+        <div className="max-w-7xl mx-auto flex items-center gap-3">
+          <SocratesIcon />
+          <div>
+            <h1 className="text-lg font-normal text-zinc-100">Epistemic Auditor</h1>
+            <p className="text-xs text-zinc-600 italic">What would Socrates ask?</p>
           </div>
         </div>
       </header>
 
       {/* Main layout */}
       <div className="flex-1 flex min-h-0">
-        <main className="flex-1 overflow-y-auto p-6 lg:p-8">
-          <div className="max-w-3xl mx-auto space-y-10">
+        <main className="flex-1 overflow-y-auto p-6 lg:p-10">
+          <div className="max-w-3xl mx-auto space-y-12">
             <ClaimInput
               claim={claim}
               setClaim={setClaim}
@@ -779,7 +787,7 @@ export default function App() {
             />
 
             {error && (
-              <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-400 text-sm">
+              <div className="bg-red-500/10 rounded-2xl p-6 text-red-400 text-sm">
                 {error}
               </div>
             )}
@@ -811,16 +819,16 @@ export default function App() {
         </main>
 
         {/* Socratic Process sidebar */}
-        <aside className="w-80 border-l border-emerald-900/15 bg-zinc-950 hidden lg:flex flex-col shrink-0">
+        <aside className="w-80 bg-zinc-950/60 hidden lg:flex flex-col shrink-0">
           <SocraticProcess thoughts={thoughts} status={loading ? status : ''} active={loading} complete={complete} />
         </aside>
       </div>
 
       {/* Footer */}
-      <footer className="border-t border-zinc-800/60 px-6 py-3 text-center shrink-0">
-        <p className="text-xs text-zinc-600">
+      <footer className="px-6 py-4 text-center shrink-0">
+        <p className="text-xs text-zinc-700">
           The first module of an epistemic engine. &rarr;{' '}
-          <a href="https://janehive.com" target="_blank" rel="noopener noreferrer" className="text-zinc-500 hover:text-zinc-300 transition-colors">
+          <a href="https://janehive.com" target="_blank" rel="noopener noreferrer" className="text-zinc-600 hover:text-zinc-400 transition-colors">
             janehive.com
           </a>
         </p>
@@ -828,7 +836,7 @@ export default function App() {
 
       {/* Mobile reasoning indicator */}
       {loading && thoughts.length > 0 && (
-        <div className="lg:hidden fixed bottom-4 right-4 bg-zinc-900 border border-emerald-900/30 rounded-xl p-3 max-w-xs shadow-xl">
+        <div className="lg:hidden fixed bottom-4 right-4 bg-zinc-900/95 backdrop-blur-sm rounded-2xl p-4 max-w-xs shadow-xl">
           <p className="text-[10px] text-emerald-500/70 font-mono font-medium mb-1">Socratic Process:</p>
           <p className="text-[11px] text-emerald-300/50 font-mono line-clamp-3">
             {thoughts[thoughts.length - 1].text}
