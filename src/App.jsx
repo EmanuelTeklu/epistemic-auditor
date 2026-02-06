@@ -111,7 +111,37 @@ function Spinner() {
   );
 }
 
-function ReasoningLog({ thoughts, status }) {
+function ThoughtEntry({ thought }) {
+  const [expanded, setExpanded] = useState(false);
+  const needsTruncation = thought.text.length > 100;
+
+  return (
+    <div className="thought-slide-in border-b border-emerald-900/20 last:border-b-0">
+      <div className="flex items-start gap-2.5 py-2.5 px-1">
+        <span className="text-emerald-700/70 font-mono text-[10px] shrink-0 pt-px select-none w-7">
+          {thought.timestamp}
+        </span>
+        <div className="flex-1 min-w-0">
+          <p
+            className={`text-emerald-300/50 text-[11px] font-mono leading-relaxed break-words ${!expanded && needsTruncation ? 'line-clamp-2' : ''}`}
+          >
+            {thought.text}
+          </p>
+          {needsTruncation && (
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="text-emerald-600/70 text-[10px] font-mono hover:text-emerald-400 cursor-pointer mt-0.5"
+            >
+              {expanded ? 'show less' : 'show more'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReasoningLog({ thoughts, status, active }) {
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -121,28 +151,33 @@ function ReasoningLog({ thoughts, status }) {
   }, [thoughts, status]);
 
   return (
-    <div className="flex flex-col h-full">
-      <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider px-4 py-3 border-b border-zinc-800 shrink-0">
-        Reasoning Log
-      </h2>
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
-        {thoughts.length === 0 && !status && (
-          <p className="text-zinc-600 text-sm italic">
-            Thoughts will appear here during audit...
-          </p>
+    <div className="flex flex-col h-full bg-zinc-950/80">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-emerald-900/30 shrink-0">
+        {active && (
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse-dot" />
+        )}
+        <h2 className="text-[11px] font-semibold font-mono text-emerald-500/70 uppercase tracking-widest">
+          Reasoning Log
+        </h2>
+      </div>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 min-h-0">
+        {thoughts.length === 0 && !active && (
+          <div className="flex items-center gap-1.5 py-4 px-1">
+            <span className="text-emerald-700/50 text-xs font-mono">
+              Ready to analyze
+            </span>
+            <span className="text-emerald-500/50 font-mono animate-cursor-blink">
+              _
+            </span>
+          </div>
         )}
         {thoughts.map((t, i) => (
-          <div key={i} className="text-sm">
-            <div className="flex items-start gap-2">
-              <span className="text-indigo-400 shrink-0 mt-0.5">&#9656;</span>
-              <p className="text-zinc-400 leading-relaxed break-words">{t}</p>
-            </div>
-          </div>
+          <ThoughtEntry key={i} thought={t} />
         ))}
         {status && (
-          <div className="flex items-center gap-2 text-sm text-indigo-400">
+          <div className="thought-slide-in flex items-center gap-2 py-2.5 px-1">
             <Spinner />
-            <span>{status}</span>
+            <span className="text-emerald-400/70 text-[11px] font-mono">{status}</span>
           </div>
         )}
       </div>
@@ -306,7 +341,7 @@ function ResultsDashboard({ result }) {
   const colors = SCORE_COLORS[result.overall_score] || SCORE_COLORS.Unsupported;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Original Claim */}
       <div className="bg-zinc-800/30 border border-zinc-800 rounded-lg p-5">
         <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">
@@ -324,7 +359,7 @@ function ResultsDashboard({ result }) {
             <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">
               Epistemic Health
             </p>
-            <p className="text-zinc-300 text-sm leading-relaxed max-w-xl">
+            <p className="text-zinc-300 text-base leading-relaxed max-w-xl">
               {result.summary}
             </p>
           </div>
@@ -361,6 +396,7 @@ export default function App() {
   const [thoughts, setThoughts] = useState([]);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
+  const auditStartRef = useRef(null);
 
   const handleAudit = useCallback(async () => {
     if (!claim.trim() || loading) return;
@@ -370,12 +406,16 @@ export default function App() {
     setThoughts([]);
     setStatus('');
     setError('');
+    auditStartRef.current = Date.now();
 
     try {
       const auditResult = await runAudit(claim, {
         onThought: (text) => {
-          const summary = text.length > 300 ? text.slice(0, 297) + '...' : text;
-          setThoughts((prev) => [...prev, summary]);
+          const elapsed = Math.floor((Date.now() - auditStartRef.current) / 1000);
+          const mins = Math.floor(elapsed / 60);
+          const secs = elapsed % 60;
+          const timestamp = `${mins}:${String(secs).padStart(2, '0')}`;
+          setThoughts((prev) => [...prev, { text, timestamp }]);
         },
         onStatus: (msg) => setStatus(msg),
       });
@@ -435,8 +475,8 @@ export default function App() {
         </main>
 
         {/* Reasoning Log sidebar */}
-        <aside className="w-80 border-l border-zinc-800 bg-zinc-900/50 hidden lg:flex flex-col shrink-0">
-          <ReasoningLog thoughts={thoughts} status={loading ? status : ''} />
+        <aside className="w-80 border-l border-emerald-900/20 bg-zinc-950 hidden lg:flex flex-col shrink-0">
+          <ReasoningLog thoughts={thoughts} status={loading ? status : ''} active={loading} />
         </aside>
       </div>
 
@@ -449,10 +489,10 @@ export default function App() {
 
       {/* Mobile reasoning log */}
       {loading && thoughts.length > 0 && (
-        <div className="lg:hidden fixed bottom-4 right-4 bg-zinc-800 border border-zinc-700 rounded-lg p-3 max-w-xs shadow-xl">
-          <p className="text-xs text-zinc-400 font-medium mb-1">Latest thought:</p>
-          <p className="text-xs text-zinc-500 line-clamp-3">
-            {thoughts[thoughts.length - 1]}
+        <div className="lg:hidden fixed bottom-4 right-4 bg-zinc-900 border border-emerald-900/30 rounded-lg p-3 max-w-xs shadow-xl">
+          <p className="text-[10px] text-emerald-500/70 font-mono font-medium mb-1">Latest thought:</p>
+          <p className="text-[11px] text-emerald-300/50 font-mono line-clamp-3">
+            {thoughts[thoughts.length - 1].text}
           </p>
         </div>
       )}
