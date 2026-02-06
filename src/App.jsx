@@ -54,13 +54,22 @@ function extractSentence(text) {
   return sentence.length > 100 ? sentence.slice(0, 97) + '...' : sentence;
 }
 
-const EXAMPLE_CLAIMS = [
+const ALL_CLAIMS = [
   'GLP-1 drugs will reduce US obesity by 50% in 10 years',
   'China will invade Taiwan before 2030',
   'Global AI regulation will be established by 2027',
+  'Remote work will become the default for knowledge workers by 2028',
+  'Bitcoin will exceed $500K by 2030',
+  'Lab-grown meat will be cheaper than conventional meat by 2030',
+  'The US will experience a recession in 2026',
+  'Nuclear fusion will deliver commercial power by 2035',
+  'Africa will have the world\'s largest workforce by 2040',
 ];
 
-const EXPLORE_CONCEPTS = CONCEPTS.slice(0, 5);
+function pickRandom(arr, n) {
+  const shuffled = [...arr].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, n);
+}
 
 const THOUGHT_SCHEDULE = [2000, 5000, 9000, 14000];
 const THOUGHT_TIMESTAMPS = ['0:02', '0:05', '0:09', '0:14'];
@@ -200,14 +209,14 @@ function ClaimInput({ claim, setClaim, onSubmit, loading }) {
 
 // --- Empty State ---
 
-function EmptyState({ onSelect, activeConcept, onConceptClick, onConceptClose }) {
+function EmptyState({ claims, concepts, onSelect, activeConcept, onConceptClick, onConceptClose }) {
   return (
     <div className="text-center py-16">
       <p className="text-zinc-500 text-sm italic mb-8 tracking-wide">
         No claim is too sacred to question.
       </p>
       <div className="space-y-3 max-w-lg mx-auto mb-12">
-        {EXAMPLE_CLAIMS.map((claim, i) => (
+        {claims.map((claim, i) => (
           <button
             key={i}
             onClick={() => onSelect(claim)}
@@ -221,7 +230,7 @@ function EmptyState({ onSelect, activeConcept, onConceptClick, onConceptClose })
         Or explore a concept
       </p>
       <div className="flex flex-wrap justify-center gap-3 mb-6">
-        {EXPLORE_CONCEPTS.map(concept => (
+        {concepts.map(concept => (
           <button
             key={concept.id}
             onClick={() => onConceptClick(concept)}
@@ -677,6 +686,8 @@ export default function App() {
   const [complete, setComplete] = useState(false);
   const [userForecast, setUserForecast] = useState(null);
   const [activeConcept, setActiveConcept] = useState(null);
+  const [displayedClaims, setDisplayedClaims] = useState(() => pickRandom(ALL_CLAIMS, 3));
+  const [displayedConcepts, setDisplayedConcepts] = useState(() => pickRandom(CONCEPTS, 5));
   const rawThoughtsRef = useRef([]);
   const thoughtTimersRef = useRef([]);
 
@@ -739,16 +750,37 @@ export default function App() {
     setClaim(text);
   }, []);
 
+  const handleReset = useCallback(() => {
+    setClaim('');
+    setResult(null);
+    setThoughts([]);
+    setStatus('');
+    setError('');
+    setComplete(false);
+    setUserForecast(null);
+    setActiveConcept(null);
+    setDisplayedClaims(pickRandom(ALL_CLAIMS, 3));
+    setDisplayedConcepts(pickRandom(CONCEPTS, 5));
+    thoughtTimersRef.current.forEach(t => clearTimeout(t));
+    thoughtTimersRef.current = [];
+    rawThoughtsRef.current = [];
+  }, []);
+
   return (
     <div className="min-h-screen bg-depth text-zinc-100 flex flex-col">
       {/* Header */}
       <header className="px-6 py-5 shrink-0">
-        <div className="max-w-7xl mx-auto flex items-center gap-3">
-          <SocratesIcon />
-          <div>
-            <h1 className="text-lg font-normal text-zinc-100">Epistemic Auditor</h1>
-            <p className="text-xs text-zinc-600 italic">What would Socrates ask?</p>
-          </div>
+        <div className="max-w-7xl mx-auto">
+          <button
+            onClick={handleReset}
+            className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+          >
+            <SocratesIcon />
+            <div className="text-left">
+              <h1 className="text-lg font-normal text-zinc-100">Epistemic Auditor</h1>
+              <p className="text-xs text-zinc-600 italic">What would Socrates ask?</p>
+            </div>
+          </button>
         </div>
       </header>
 
@@ -772,6 +804,8 @@ export default function App() {
 
             {!result && !loading && !error && (
               <EmptyState
+                claims={displayedClaims}
+                concepts={displayedConcepts}
                 onSelect={handleSelect}
                 activeConcept={activeConcept}
                 onConceptClick={handleConceptClick}
