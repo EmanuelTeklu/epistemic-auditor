@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { runAudit, runDefinition, runGoDeeper } from './api';
+import { runAudit, runGoDeeper } from './api';
+import { CONCEPTS, findConcept, getConceptById } from './concepts';
 
 // --- Utilities ---
 
@@ -12,7 +13,7 @@ const SCORE_COLORS = {
 
 const SCORE_VERDICTS = {
   Strong: 'Evidence broadly supports this claim.',
-  Moderate: 'Mixed evidence \u2014 proceed with caution.',
+  Moderate: 'Mixed evidence — proceed with caution.',
   Weak: 'This claim requires significant scrutiny.',
   Unsupported: 'Little to no evidence supports this claim.',
 };
@@ -22,6 +23,21 @@ const CONFIDENCE_COLORS = {
   Moderate: 'text-amber-400',
   Low: 'text-red-400',
 };
+
+const SCORE_TO_PROBABILITY = {
+  Strong: { label: 'Likely supported', range: '60–80%' },
+  Moderate: { label: 'Mixed evidence', range: '40–60%' },
+  Weak: { label: 'Significant doubt', range: '20–40%' },
+  Unsupported: { label: 'Largely unsupported', range: '<20%' },
+};
+
+const FORECAST_BUCKETS = [
+  { label: 'Very Unlikely', range: '<20%' },
+  { label: 'Unlikely', range: '20–40%' },
+  { label: 'Toss-up', range: '40–60%' },
+  { label: 'Likely', range: '60–80%' },
+  { label: 'Very Likely', range: '>80%' },
+];
 
 function getDomain(url) {
   try {
@@ -44,20 +60,7 @@ const EXAMPLE_CLAIMS = [
   'Global AI regulation will be established by 2027',
 ];
 
-const EXAMPLE_CONCEPTS = [
-  'Moral hazard',
-  'Base rate neglect',
-  'Epistemic humility',
-];
-
-const PLACEHOLDER_BY_MODE = {
-  claim: 'Paste a claim to audit, e.g. \u201cGlobal temperatures will rise 2\u00B0C by 2030\u201d',
-  forecast: 'Enter a probability forecast, e.g. \u201c70% chance China invades Taiwan by 2030\u201d',
-  definition: 'Enter a concept to explore, e.g. \u201cmoral hazard\u201d or \u201cherd immunity\u201d',
-};
-
-const BUTTON_LABEL = { claim: 'Run Audit', forecast: 'Analyze Forecast', definition: 'Explore Concept' };
-const LOADING_LABEL = { claim: 'Running Audit...', forecast: 'Analyzing...', definition: 'Exploring...' };
+const EXPLORE_CONCEPTS = CONCEPTS.slice(0, 5);
 
 const THOUGHT_SCHEDULE = [2000, 5000, 9000, 14000];
 const THOUGHT_TIMESTAMPS = ['0:02', '0:05', '0:09', '0:14'];
@@ -112,44 +115,60 @@ function ScoreBadge({ score }) {
   );
 }
 
-// --- Input Mode Pills ---
+// --- Concept Card (static, no API) ---
 
-const INPUT_MODES = [
-  { key: 'claim', label: 'Claim' },
-  { key: 'forecast', label: 'Forecast' },
-  { key: 'definition', label: 'Definition' },
-];
+function ConceptCard({ concept, onConceptClick, onClose }) {
+  if (!concept) return null;
 
-function InputModePills({ mode, setMode }) {
   return (
-    <div className="flex gap-2">
-      {INPUT_MODES.map(m => (
+    <div className="card-elevated bg-zinc-900/50 rounded-2xl p-6 space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-normal text-indigo-400/80 mb-1">Concept</p>
+          <h3 className="text-lg font-light text-zinc-100">{concept.name}</h3>
+        </div>
         <button
-          key={m.key}
-          onClick={() => setMode(m.key)}
-          className={`tactile min-h-10 px-4 py-2 text-xs font-medium rounded-full cursor-pointer ${
-            mode === m.key
-              ? 'bg-indigo-600/20 text-indigo-300'
-              : 'bg-zinc-900/40 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'
-          }`}
+          onClick={onClose}
+          className="text-zinc-600 hover:text-zinc-300 transition-colors cursor-pointer shrink-0 text-lg leading-none"
         >
-          {m.label}
+          &times;
         </button>
-      ))}
+      </div>
+      <p className="text-sm text-zinc-300 leading-loose">{concept.definition}</p>
+      <div>
+        <p className="text-sm font-normal text-zinc-500 mb-2">Key tension</p>
+        <p className="text-sm text-zinc-400 leading-loose italic">{concept.keyTension}</p>
+      </div>
+      {concept.relatedConcepts?.length > 0 && (
+        <div className="flex flex-wrap gap-2 pt-1">
+          {concept.relatedConcepts.map(id => {
+            const related = getConceptById(id);
+            if (!related) return null;
+            return (
+              <button
+                key={id}
+                onClick={() => onConceptClick(related)}
+                className="tactile px-3 py-1.5 text-xs font-medium text-zinc-500 bg-zinc-800/50 rounded-full hover:text-zinc-200 hover:bg-zinc-800/80 cursor-pointer"
+              >
+                {related.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
 // --- Claim Input ---
 
-function ClaimInput({ claim, setClaim, onSubmit, loading, mode, setMode }) {
+function ClaimInput({ claim, setClaim, onSubmit, loading }) {
   return (
     <div className="space-y-4">
-      <InputModePills mode={mode} setMode={setMode} />
       <textarea
         value={claim}
         onChange={(e) => setClaim(e.target.value)}
-        placeholder={PLACEHOLDER_BY_MODE[mode]}
+        placeholder='Paste a claim to audit, e.g. "Global temperatures will rise 2°C by 2030"'
         className="textarea-premium w-full h-32 bg-zinc-900/50 rounded-2xl p-6 text-zinc-100 placeholder-zinc-600 resize-none focus:outline-none"
         disabled={loading}
         onKeyDown={(e) => {
@@ -165,10 +184,10 @@ function ClaimInput({ claim, setClaim, onSubmit, loading, mode, setMode }) {
           {loading ? (
             <span className="flex items-center gap-2">
               <Spinner />
-              {LOADING_LABEL[mode]}
+              Running Audit...
             </span>
           ) : (
-            BUTTON_LABEL[mode]
+            'Run Audit'
           )}
         </button>
         <span className="text-xs text-zinc-600 hidden sm:inline">
@@ -181,7 +200,7 @@ function ClaimInput({ claim, setClaim, onSubmit, loading, mode, setMode }) {
 
 // --- Empty State ---
 
-function EmptyState({ onSelect }) {
+function EmptyState({ onSelect, activeConcept, onConceptClick, onConceptClose }) {
   return (
     <div className="text-center py-16">
       <p className="text-zinc-500 text-sm italic mb-8 tracking-wide">
@@ -191,7 +210,7 @@ function EmptyState({ onSelect }) {
         {EXAMPLE_CLAIMS.map((claim, i) => (
           <button
             key={i}
-            onClick={() => onSelect(claim, 'claim')}
+            onClick={() => onSelect(claim)}
             className="tactile block w-full text-left px-6 py-5 bg-zinc-900/40 rounded-2xl text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60 cursor-pointer text-sm leading-loose min-h-12"
           >
             &ldquo;{claim}&rdquo;
@@ -201,17 +220,26 @@ function EmptyState({ onSelect }) {
       <p className="text-zinc-600 text-xs mb-4">
         Or explore a concept
       </p>
-      <div className="flex justify-center gap-3">
-        {EXAMPLE_CONCEPTS.map((concept, i) => (
+      <div className="flex flex-wrap justify-center gap-3 mb-6">
+        {EXPLORE_CONCEPTS.map(concept => (
           <button
-            key={i}
-            onClick={() => onSelect(concept, 'definition')}
-            className="tactile px-4 py-2.5 text-xs font-medium text-zinc-500 bg-zinc-900/30 rounded-full hover:text-zinc-200 hover:bg-zinc-800/50 cursor-pointer min-h-10"
+            key={concept.id}
+            onClick={() => onConceptClick(concept)}
+            className={`tactile px-4 py-2.5 text-xs font-medium rounded-full cursor-pointer min-h-10 ${
+              activeConcept?.id === concept.id
+                ? 'bg-indigo-600/20 text-indigo-300'
+                : 'bg-zinc-900/30 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/50'
+            }`}
           >
-            {concept}
+            {concept.name}
           </button>
         ))}
       </div>
+      {activeConcept && (
+        <div className="max-w-lg mx-auto text-left">
+          <ConceptCard concept={activeConcept} onConceptClick={onConceptClick} onClose={onConceptClose} />
+        </div>
+      )}
     </div>
   );
 }
@@ -219,7 +247,7 @@ function EmptyState({ onSelect }) {
 // --- Socratic Process (Sidebar) ---
 
 function ThoughtEntry({ thought, index }) {
-  const label = `[${String(index + 1).padStart(2, '0')} \u00B7 ${thought.timestamp}s]`;
+  const label = `[${String(index + 1).padStart(2, '0')} · ${thought.timestamp}s]`;
 
   return (
     <div className="thought-slide-in">
@@ -404,27 +432,99 @@ function SourcesList({ sources }) {
   );
 }
 
-// --- Concept Map ---
+// --- Forecast Comparison ---
 
-function ConceptMap({ concepts, onConceptClick }) {
+function ForecastComparison({ result, userForecast, setUserForecast }) {
+  const colors = SCORE_COLORS[result.overall_score] || SCORE_COLORS.Unsupported;
+  const aiAssessment = SCORE_TO_PROBABILITY[result.overall_score] || SCORE_TO_PROBABILITY.Moderate;
+
+  return (
+    <div>
+      <h3 className="text-sm font-normal text-zinc-500 mb-4">What&rsquo;s your call?</h3>
+      <div className="flex flex-wrap gap-2 mb-6">
+        {FORECAST_BUCKETS.map(bucket => (
+          <button
+            key={bucket.label}
+            onClick={() => setUserForecast(
+              userForecast?.label === bucket.label ? null : bucket
+            )}
+            className={`tactile px-4 py-2.5 text-xs font-medium rounded-full cursor-pointer min-h-10 ${
+              userForecast?.label === bucket.label
+                ? 'bg-indigo-600/20 text-indigo-300'
+                : 'bg-zinc-900/30 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'
+            }`}
+          >
+            {bucket.label} ({bucket.range})
+          </button>
+        ))}
+      </div>
+      {userForecast && (
+        <div className="grid grid-cols-2 gap-5">
+          <div className="card-elevated bg-zinc-900/40 rounded-2xl p-6 text-center">
+            <p className="text-sm font-normal text-zinc-500 mb-3">Your call</p>
+            <p className="text-2xl font-light text-zinc-100 mb-1">{userForecast.range}</p>
+            <p className="text-xs text-zinc-500">{userForecast.label}</p>
+          </div>
+          <div
+            className="card-elevated rounded-2xl p-6 text-center"
+            style={{ background: `linear-gradient(135deg, ${colors.glow} 0%, rgba(24, 24, 27, 0.6) 100%)` }}
+          >
+            <p className="text-sm font-normal text-zinc-500 mb-3">AI assessment</p>
+            <p className={`text-2xl font-light mb-1 ${colors.text}`}>{aiAssessment.range}</p>
+            <p className="text-xs text-zinc-500">{aiAssessment.label}</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Concept Map (matches AI concepts to local database) ---
+
+function ConceptMap({ concepts, activeConcept, onConceptClick, onConceptClose }) {
   if (!concepts?.length) return null;
+
+  const mapped = concepts.map(name => ({
+    name,
+    data: findConcept(name),
+  }));
 
   return (
     <div>
       <h3 className="text-sm font-normal text-zinc-500 mb-4">
         Related concepts
       </h3>
-      <div className="flex flex-wrap gap-3">
-        {concepts.map((concept, i) => (
-          <button
-            key={i}
-            onClick={() => onConceptClick(concept)}
-            className="tactile px-4 py-2.5 text-xs font-medium text-zinc-400 bg-zinc-900/30 rounded-full hover:text-zinc-200 hover:bg-zinc-800/50 cursor-pointer min-h-10"
-          >
-            {concept}
-          </button>
-        ))}
+      <div className="flex flex-wrap gap-3 mb-4">
+        {mapped.map((item, i) => {
+          const isActive = activeConcept?.id === item.data?.id;
+          if (item.data) {
+            return (
+              <button
+                key={i}
+                onClick={() => onConceptClick(item.data)}
+                className={`tactile px-4 py-2.5 text-xs font-medium rounded-full cursor-pointer min-h-10 ${
+                  isActive
+                    ? 'bg-indigo-600/20 text-indigo-300'
+                    : 'bg-zinc-900/30 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+                }`}
+              >
+                {item.data.name}
+              </button>
+            );
+          }
+          return (
+            <span
+              key={i}
+              className="px-4 py-2.5 text-xs font-medium text-zinc-600 bg-zinc-900/20 rounded-full min-h-10 inline-flex items-center"
+            >
+              {item.name}
+            </span>
+          );
+        })}
       </div>
+      {activeConcept && (
+        <ConceptCard concept={activeConcept} onConceptClick={onConceptClick} onClose={onConceptClose} />
+      )}
     </div>
   );
 }
@@ -441,16 +541,18 @@ function GoDeeper({ claim }) {
   const [activeType, setActiveType] = useState(null);
   const [result, setResult] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleClick = async (type) => {
     setActiveType(type);
     setLoading(true);
     setResult('');
+    setError('');
     try {
       const text = await runGoDeeper(type, claim);
       setResult(text);
-    } catch (err) {
-      setResult('Error: ' + (err.message || 'Failed to load'));
+    } catch {
+      setError('Analysis temporarily unavailable. Please try again in a moment.');
     } finally {
       setLoading(false);
     }
@@ -468,13 +570,26 @@ function GoDeeper({ claim }) {
             <div className="flex items-center gap-3 text-zinc-400 text-sm">
               <Spinner /> Researching...
             </div>
+          ) : error ? (
+            <>
+              <div className="flex items-center gap-3 px-4 py-3 bg-amber-500/5 rounded-xl">
+                <span className="text-amber-400/80 text-sm">&#9888;</span>
+                <p className="text-sm text-zinc-400">{error}</p>
+              </div>
+              <button
+                onClick={() => { setActiveType(null); setResult(''); setError(''); }}
+                className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer mt-6 block"
+              >
+                &larr; Back to options
+              </button>
+            </>
           ) : (
             <>
               <div className="text-sm text-zinc-300 leading-loose whitespace-pre-line">
                 {result}
               </div>
               <button
-                onClick={() => { setActiveType(null); setResult(''); }}
+                onClick={() => { setActiveType(null); setResult(''); setError(''); }}
                 className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer mt-6 block"
               >
                 &larr; Back to options
@@ -508,7 +623,7 @@ function GoDeeper({ claim }) {
   );
 }
 
-// --- Results: Claim Mode ---
+// --- Results: Claim Dashboard ---
 
 function ClaimDashboard({ result }) {
   if (!result) return null;
@@ -550,166 +665,36 @@ function ClaimDashboard({ result }) {
   );
 }
 
-// --- Results: Forecast Mode ---
-
-function ForecastDashboard({ result, onConceptClick }) {
-  if (!result) return null;
-
-  const colors = SCORE_COLORS[result.overall_score] || SCORE_COLORS.Unsupported;
-  const verdict = SCORE_VERDICTS[result.overall_score] || '';
-
-  return (
-    <div className="space-y-12">
-      {/* Probability comparison */}
-      <div className="grid grid-cols-2 gap-5">
-        <div className="card-elevated bg-zinc-900/40 rounded-2xl p-8 text-center">
-          <p className="text-sm font-normal text-zinc-500 mb-3">Stated</p>
-          <p className="text-3xl font-light text-zinc-100">{result.stated_probability || '\u2014'}</p>
-        </div>
-        <div
-          className="card-elevated rounded-2xl p-8 text-center"
-          style={{ background: `linear-gradient(135deg, ${colors.glow} 0%, rgba(24, 24, 27, 0.6) 100%)` }}
-        >
-          <p className="text-sm font-normal text-zinc-500 mb-3">Adjusted</p>
-          <p className={`text-3xl font-light ${colors.text}`}>{result.adjusted_probability || '\u2014'}</p>
-        </div>
-      </div>
-
-      {/* Base rate analysis */}
-      <div className="card-elevated bg-zinc-900/30 rounded-2xl p-8">
-        <h3 className="text-sm font-normal text-zinc-500 mb-3">Base rate analysis</h3>
-        <p className="text-sm text-zinc-300 leading-loose">{result.base_rate_analysis}</p>
-      </div>
-
-      {/* Reference classes */}
-      {result.reference_classes?.length > 0 && (
-        <div>
-          <h3 className="text-sm font-normal text-zinc-500 mb-5">Reference classes</h3>
-          <div className="space-y-4">
-            {result.reference_classes.map((rc, i) => (
-              <div key={i} className="card-elevated bg-zinc-900/30 rounded-2xl p-6">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm font-normal text-zinc-200">{rc.name}</p>
-                  <span className="text-xs font-mono text-indigo-400">{rc.base_rate}</span>
-                </div>
-                <p className="text-xs text-zinc-500 leading-relaxed">{rc.relevance}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Calibration card */}
-      <div
-        className="rounded-2xl p-8"
-        style={{ background: `linear-gradient(135deg, ${colors.glow} 0%, rgba(24, 24, 27, 0.6) 100%)` }}
-      >
-        <div className="flex items-start justify-between gap-8">
-          <div className="flex-1">
-            <p className="text-sm font-normal text-zinc-500 mb-3">Calibration assessment</p>
-            <p className="text-zinc-300 text-sm leading-loose mb-3">{result.calibration_assessment}</p>
-            <p className="text-zinc-300 text-base leading-loose">{result.summary}</p>
-            {verdict && <p className={`text-sm font-normal ${colors.text} italic mt-3`}>{verdict}</p>}
-          </div>
-          <ScoreBadge score={result.overall_score} />
-        </div>
-      </div>
-
-      {result.sources?.length > 0 && <SourcesList sources={result.sources} />}
-      <ConceptMap concepts={result.related_concepts} onConceptClick={onConceptClick} />
-    </div>
-  );
-}
-
-// --- Results: Definition Mode ---
-
-function DefinitionCard({ result, onConceptClick }) {
-  if (!result) return null;
-
-  return (
-    <div className="space-y-12">
-      {/* Definition */}
-      <div className="card-elevated bg-zinc-900/40 rounded-2xl p-8">
-        <p className="text-sm font-normal text-indigo-400/80 mb-3">Definition</p>
-        <h2 className="text-2xl font-light text-zinc-100 mb-4">{result.concept}</h2>
-        <p className="text-zinc-300 leading-loose">{result.definition}</p>
-      </div>
-
-      {/* Key debates */}
-      {result.key_debates?.length > 0 && (
-        <div>
-          <h3 className="text-sm font-normal text-zinc-500 mb-5">Key debates</h3>
-          <div className="space-y-4">
-            {result.key_debates.map((debate, i) => (
-              <div key={i} className="card-elevated bg-zinc-900/30 rounded-2xl p-6">
-                <p className="text-sm font-normal text-zinc-200 mb-2">{debate.title}</p>
-                <p className="text-sm text-zinc-400 leading-loose">{debate.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Misconceptions */}
-      {result.common_misconceptions?.length > 0 && (
-        <div>
-          <h3 className="text-sm font-normal text-zinc-500 mb-5">Common misconceptions</h3>
-          <div className="space-y-4">
-            {result.common_misconceptions.map((m, i) => (
-              <div key={i} className="card-elevated bg-zinc-900/30 rounded-2xl p-6">
-                <div className="flex items-start gap-3 mb-3">
-                  <span className="text-red-400/70 shrink-0">&times;</span>
-                  <p className="text-sm text-zinc-300 leading-loose">{m.misconception}</p>
-                </div>
-                <div className="flex items-start gap-3">
-                  <span className="text-emerald-400/70 shrink-0">&check;</span>
-                  <p className="text-sm text-zinc-400 leading-loose">{m.reality}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {result.sources?.length > 0 && <SourcesList sources={result.sources} />}
-      <ConceptMap concepts={result.related_concepts} onConceptClick={onConceptClick} />
-    </div>
-  );
-}
-
 // --- Main App ---
 
 export default function App() {
-  const [mode, setMode] = useState('claim');
   const [claim, setClaim] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
-  const [resultMode, setResultMode] = useState('claim');
   const [thoughts, setThoughts] = useState([]);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [complete, setComplete] = useState(false);
-  const auditStartRef = useRef(null);
+  const [userForecast, setUserForecast] = useState(null);
+  const [activeConcept, setActiveConcept] = useState(null);
   const rawThoughtsRef = useRef([]);
   const thoughtTimersRef = useRef([]);
-  const displayedCountRef = useRef(0);
 
   const handleAudit = useCallback(async () => {
     if (!claim.trim() || loading) return;
 
     setLoading(true);
     setResult(null);
-    setResultMode(mode);
     setThoughts([]);
     setStatus('');
     setError('');
     setComplete(false);
+    setUserForecast(null);
+    setActiveConcept(null);
 
     rawThoughtsRef.current = [];
-    displayedCountRef.current = 0;
     thoughtTimersRef.current.forEach(t => clearTimeout(t));
     thoughtTimersRef.current = [];
-    auditStartRef.current = Date.now();
 
     THOUGHT_SCHEDULE.forEach((delay, idx) => {
       const timer = setTimeout(() => {
@@ -726,38 +711,32 @@ export default function App() {
     });
 
     try {
-      let auditResult;
-      if (mode === 'definition') {
-        auditResult = await runDefinition(claim, {
-          onThought: (text) => { rawThoughtsRef.current.push(text); },
-          onStatus: (msg) => setStatus(msg),
-        });
-      } else {
-        auditResult = await runAudit(claim, mode, {
-          onThought: (text) => { rawThoughtsRef.current.push(text); },
-          onStatus: (msg) => setStatus(msg),
-        });
-      }
+      const auditResult = await runAudit(claim, {
+        onThought: (text) => { rawThoughtsRef.current.push(text); },
+        onStatus: (msg) => setStatus(msg),
+      });
       setResult(auditResult);
       setStatus('');
-    } catch (err) {
-      setError(err.message || 'An unexpected error occurred.');
+    } catch {
+      setError('Analysis temporarily unavailable. Please try again in a moment.');
       setStatus('');
     } finally {
       setLoading(false);
       setComplete(true);
       thoughtTimersRef.current.forEach(t => clearTimeout(t));
     }
-  }, [claim, loading, mode]);
+  }, [claim, loading]);
 
   const handleConceptClick = useCallback((concept) => {
-    setClaim(concept);
-    setMode('definition');
+    setActiveConcept(prev => prev?.id === concept.id ? null : concept);
   }, []);
 
-  const handleSelect = useCallback((text, selectedMode) => {
+  const handleConceptClose = useCallback(() => {
+    setActiveConcept(null);
+  }, []);
+
+  const handleSelect = useCallback((text) => {
     setClaim(text);
-    if (selectedMode) setMode(selectedMode);
   }, []);
 
   return (
@@ -782,37 +761,39 @@ export default function App() {
               setClaim={setClaim}
               onSubmit={handleAudit}
               loading={loading}
-              mode={mode}
-              setMode={setMode}
             />
 
             {error && (
-              <div className="bg-red-500/10 rounded-2xl p-6 text-red-400 text-sm">
-                {error}
+              <div className="flex items-center gap-3 px-6 py-5 bg-amber-500/5 rounded-2xl">
+                <span className="text-amber-400/80 text-lg">&#9888;</span>
+                <p className="text-sm text-zinc-400">{error}</p>
               </div>
             )}
 
             {!result && !loading && !error && (
-              <EmptyState onSelect={handleSelect} />
+              <EmptyState
+                onSelect={handleSelect}
+                activeConcept={activeConcept}
+                onConceptClick={handleConceptClick}
+                onConceptClose={handleConceptClose}
+              />
             )}
 
-            {/* Mode-specific results */}
-            {resultMode === 'definition' ? (
-              <DefinitionCard result={result} onConceptClick={handleConceptClick} />
-            ) : resultMode === 'forecast' ? (
-              <>
-                <ForecastDashboard result={result} onConceptClick={handleConceptClick} />
-                {result && <GoDeeper claim={claim} />}
-              </>
-            ) : (
+            {result && (
               <>
                 <ClaimDashboard result={result} />
-                {result && (
-                  <>
-                    <GoDeeper claim={claim} />
-                    <ConceptMap concepts={result.related_concepts} onConceptClick={handleConceptClick} />
-                  </>
-                )}
+                <ForecastComparison
+                  result={result}
+                  userForecast={userForecast}
+                  setUserForecast={setUserForecast}
+                />
+                <GoDeeper claim={claim} />
+                <ConceptMap
+                  concepts={result.related_concepts}
+                  activeConcept={activeConcept}
+                  onConceptClick={handleConceptClick}
+                  onConceptClose={handleConceptClose}
+                />
               </>
             )}
           </div>
