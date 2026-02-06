@@ -16,7 +16,55 @@ const CONFIDENCE_COLORS = {
   Low: 'text-red-400',
 };
 
+// --- URL utilities ---
+
+function extractRealUrl(url) {
+  try {
+    if (url.includes('vertexaisearch.cloud.google.com')) {
+      const parsed = new URL(url);
+      const realUrl = parsed.searchParams.get('url');
+      if (realUrl) return realUrl;
+    }
+    return url;
+  } catch {
+    return url;
+  }
+}
+
+function getDomain(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
+
+const EXAMPLE_CLAIMS = [
+  'GLP-1 drugs will reduce US obesity by 50% in 10 years',
+  'China will invade Taiwan before 2030',
+  'Global AI regulation will be established by 2027',
+];
+
 // --- Components ---
+
+function EmptyState({ onSelect }) {
+  return (
+    <div className="text-center py-8">
+      <p className="text-zinc-500 text-sm mb-4">Try one of these claims:</p>
+      <div className="space-y-2 max-w-lg mx-auto">
+        {EXAMPLE_CLAIMS.map((claim, i) => (
+          <button
+            key={i}
+            onClick={() => onSelect(claim)}
+            className="block w-full text-left px-4 py-3 bg-zinc-800/30 border border-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 hover:border-zinc-700 transition-colors cursor-pointer text-sm"
+          >
+            &ldquo;{claim}&rdquo;
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function ClaimInput({ claim, setClaim, onSubmit, loading }) {
   return (
@@ -187,6 +235,71 @@ function SubClaimCard({ subClaim, index }) {
   );
 }
 
+function SourcesList({ urls }) {
+  const [showAll, setShowAll] = useState(false);
+
+  const realUrls = [...new Set(urls.map(extractRealUrl))];
+
+  // Group by domain, sorted by frequency
+  const domainMap = new Map();
+  for (const url of realUrls) {
+    const domain = getDomain(url);
+    if (!domainMap.has(domain)) domainMap.set(domain, []);
+    domainMap.get(domain).push(url);
+  }
+  const groups = [...domainMap.entries()].sort((a, b) => b[1].length - a[1].length);
+
+  const TOP = 8;
+  let count = 0;
+  const visibleGroups = [];
+  for (const [domain, domainUrls] of groups) {
+    if (!showAll && count >= TOP) break;
+    const slice = showAll ? domainUrls : domainUrls.slice(0, TOP - count);
+    if (slice.length > 0) {
+      visibleGroups.push([domain, slice]);
+      count += slice.length;
+    }
+  }
+  const hasMore = realUrls.length > TOP;
+
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">
+        Sources ({realUrls.length})
+      </h3>
+      <div className="bg-zinc-800/30 border border-zinc-800 rounded-lg p-4 space-y-3">
+        {visibleGroups.map(([domain, domainUrls]) => (
+          <div key={domain}>
+            <p className="text-[11px] text-zinc-600 uppercase tracking-wider mb-1">{domain}</p>
+            <ul className="space-y-1 pl-2">
+              {domainUrls.map((url, i) => (
+                <li key={i} className="text-sm truncate">
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-indigo-400 hover:text-indigo-300 transition-colors"
+                  >
+                    {domain}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+        {hasMore && (
+          <button
+            onClick={() => setShowAll(!showAll)}
+            className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer pt-1"
+          >
+            {showAll ? 'Show fewer' : `Show all ${realUrls.length} sources`}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ResultsDashboard({ result }) {
   if (!result) return null;
 
@@ -233,27 +346,7 @@ function ResultsDashboard({ result }) {
 
       {/* Sources */}
       {result.source_urls?.length > 0 && (
-        <div>
-          <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">
-            Sources ({result.source_urls.length})
-          </h3>
-          <div className="bg-zinc-800/30 border border-zinc-800 rounded-lg p-4">
-            <ul className="space-y-1.5">
-              {result.source_urls.map((url, i) => (
-                <li key={i} className="text-sm truncate">
-                  <a
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-indigo-400 hover:text-indigo-300 transition-colors"
-                  >
-                    {url}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
+        <SourcesList urls={result.source_urls} />
       )}
     </div>
   );
@@ -310,7 +403,7 @@ export default function App() {
             </h1>
           </div>
           <p className="text-xs text-zinc-600 hidden sm:block">
-            AI-powered claim verification
+            Stress-test any claim. See the evidence.
           </p>
         </div>
       </header>
@@ -333,6 +426,10 @@ export default function App() {
               </div>
             )}
 
+            {!result && !loading && !error && (
+              <EmptyState onSelect={setClaim} />
+            )}
+
             <ResultsDashboard result={result} />
           </div>
         </main>
@@ -342,6 +439,13 @@ export default function App() {
           <ReasoningLog thoughts={thoughts} status={loading ? status : ''} />
         </aside>
       </div>
+
+      {/* Footer */}
+      <footer className="border-t border-zinc-800 px-6 py-3 text-center shrink-0">
+        <p className="text-xs text-zinc-600">
+          Built with Gemini 3 &middot; Epistemic Auditor v0.1
+        </p>
+      </footer>
 
       {/* Mobile reasoning log */}
       {loading && thoughts.length > 0 && (
