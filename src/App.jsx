@@ -4,10 +4,17 @@ import { runAudit } from './api';
 // --- Score color utilities ---
 
 const SCORE_COLORS = {
-  Strong: { bg: 'bg-emerald-500/20', border: 'border-emerald-500', text: 'text-emerald-400' },
-  Moderate: { bg: 'bg-amber-500/20', border: 'border-amber-500', text: 'text-amber-400' },
-  Weak: { bg: 'bg-orange-500/20', border: 'border-orange-500', text: 'text-orange-400' },
-  Unsupported: { bg: 'bg-red-500/20', border: 'border-red-500', text: 'text-red-400' },
+  Strong: { bg: 'bg-emerald-500/20', border: 'border-emerald-500/40', text: 'text-emerald-400', glow: 'rgba(52, 211, 153, 0.1)' },
+  Moderate: { bg: 'bg-amber-500/20', border: 'border-amber-500/40', text: 'text-amber-400', glow: 'rgba(245, 158, 11, 0.1)' },
+  Weak: { bg: 'bg-orange-500/20', border: 'border-orange-500/40', text: 'text-orange-400', glow: 'rgba(249, 115, 22, 0.1)' },
+  Unsupported: { bg: 'bg-red-500/20', border: 'border-red-500/40', text: 'text-red-400', glow: 'rgba(239, 68, 68, 0.1)' },
+};
+
+const SCORE_VERDICTS = {
+  Strong: 'Evidence broadly supports this claim.',
+  Moderate: 'Mixed evidence — proceed with caution.',
+  Weak: 'This claim requires significant scrutiny.',
+  Unsupported: 'Little to no evidence supports this claim.',
 };
 
 const CONFIDENCE_COLORS = {
@@ -36,14 +43,17 @@ const EXAMPLE_CLAIMS = [
 
 function EmptyState({ onSelect }) {
   return (
-    <div className="text-center py-8">
-      <p className="text-zinc-500 text-sm mb-4">Try one of these claims:</p>
-      <div className="space-y-2 max-w-lg mx-auto">
+    <div className="text-center py-12">
+      <p className="text-zinc-500 text-sm italic mb-6 tracking-wide">
+        No claim is too sacred to question.
+      </p>
+      <div className="space-y-3 max-w-lg mx-auto">
         {EXAMPLE_CLAIMS.map((claim, i) => (
           <button
             key={i}
             onClick={() => onSelect(claim)}
-            className="block w-full text-left px-4 py-3 bg-zinc-800/30 border border-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 hover:border-zinc-700 transition-colors cursor-pointer text-sm"
+            className="claim-card-glow block w-full text-left px-5 py-4 bg-zinc-900/50 border border-zinc-800 rounded-xl text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 hover:border-zinc-700 cursor-pointer text-sm leading-relaxed"
+            style={{ animationDelay: `${i * 0.1}s` }}
           >
             &ldquo;{claim}&rdquo;
           </button>
@@ -60,7 +70,7 @@ function ClaimInput({ claim, setClaim, onSubmit, loading }) {
         value={claim}
         onChange={(e) => setClaim(e.target.value)}
         placeholder='Paste a claim to audit, e.g. "Global temperatures will rise 2°C by 2030"'
-        className="w-full h-32 bg-zinc-800/50 border border-zinc-700 rounded-lg p-4 text-zinc-100 placeholder-zinc-500 resize-none focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+        className="textarea-premium w-full h-32 bg-zinc-900/60 border border-zinc-700/80 rounded-xl p-5 text-zinc-100 placeholder-zinc-600 resize-none focus:outline-none focus:border-indigo-500/70 focus:ring-1 focus:ring-indigo-500/30"
         disabled={loading}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) onSubmit();
@@ -98,15 +108,16 @@ function Spinner() {
   );
 }
 
-function ThoughtEntry({ thought }) {
+function ThoughtEntry({ thought, index }) {
   const [expanded, setExpanded] = useState(false);
   const needsTruncation = thought.text.length > 100;
+  const label = `[${String(index + 1).padStart(2, '0')} \u00B7 ${thought.timestamp}s]`;
 
   return (
-    <div className="thought-slide-in border-b border-emerald-900/20 last:border-b-0">
+    <div className="thought-slide-in border-b border-emerald-900/15 last:border-b-0">
       <div className="flex items-start gap-2.5 py-2.5 px-1">
-        <span className="text-emerald-700/70 font-mono text-[10px] shrink-0 pt-px select-none w-7">
-          {thought.timestamp}
+        <span className="text-emerald-600/60 font-mono text-[10px] shrink-0 pt-px select-none">
+          {label}
         </span>
         <div className="flex-1 min-w-0">
           <p
@@ -128,7 +139,7 @@ function ThoughtEntry({ thought }) {
   );
 }
 
-function ReasoningLog({ thoughts, status, active }) {
+function SocraticProcess({ thoughts, status, active }) {
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -139,19 +150,21 @@ function ReasoningLog({ thoughts, status, active }) {
 
   return (
     <div className="flex flex-col h-full bg-zinc-950/80">
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-emerald-900/30 shrink-0">
-        {active && (
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse-dot" />
+      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-emerald-900/20 shrink-0">
+        {active ? (
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-orb-pulse shrink-0" />
+        ) : (
+          <span className="w-2 h-2 rounded-full bg-zinc-700 shrink-0" />
         )}
         <h2 className="text-[11px] font-semibold font-mono text-emerald-500/70 uppercase tracking-widest">
-          Reasoning Log
+          Socratic Process
         </h2>
       </div>
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 min-h-0">
         {thoughts.length === 0 && !active && (
           <div className="flex items-center gap-1.5 py-4 px-1">
             <span className="text-emerald-700/50 text-xs font-mono">
-              Ready to analyze
+              Awaiting a claim to examine...
             </span>
             <span className="text-emerald-500/50 font-mono animate-cursor-blink">
               _
@@ -159,7 +172,7 @@ function ReasoningLog({ thoughts, status, active }) {
           </div>
         )}
         {thoughts.map((t, i) => (
-          <ThoughtEntry key={i} thought={t} />
+          <ThoughtEntry key={i} thought={t} index={i} />
         ))}
         {status && (
           <div className="thought-slide-in flex items-center gap-2 py-2.5 px-1">
@@ -175,7 +188,7 @@ function ReasoningLog({ thoughts, status, active }) {
 function ScoreBadge({ score }) {
   const colors = SCORE_COLORS[score] || SCORE_COLORS.Unsupported;
   return (
-    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold border ${colors.bg} ${colors.border} ${colors.text}`}>
+    <span className={`inline-flex items-center px-5 py-2 rounded-full text-lg font-bold border ${colors.bg} ${colors.border} ${colors.text}`}>
       {score}
     </span>
   );
@@ -186,10 +199,10 @@ function SubClaimCard({ subClaim, index }) {
   const confidenceColor = CONFIDENCE_COLORS[subClaim.confidence] || 'text-zinc-400';
 
   return (
-    <div className="border border-zinc-800 rounded-lg overflow-hidden">
+    <div className="card-glow border border-zinc-800 rounded-xl overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between p-4 text-left hover:bg-zinc-800/50 transition-colors cursor-pointer"
+        className="w-full flex items-center justify-between p-4 text-left hover:bg-zinc-800/40 transition-colors cursor-pointer"
       >
         <div className="flex items-center gap-3 min-w-0">
           <span className="text-zinc-600 text-sm font-mono shrink-0">
@@ -278,20 +291,21 @@ function SourcesList({ sources }) {
       <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">
         Sources ({sources.length})
       </h3>
-      <div className="bg-zinc-800/30 border border-zinc-800 rounded-lg p-4">
-        <ul className="space-y-1.5">
+      <div className="card-glow bg-zinc-900/40 border border-zinc-800 rounded-xl p-5">
+        <ul className="space-y-2">
           {visible.map(([label, groupSources]) => (
             <li key={label} className="text-sm flex items-center gap-2">
+              <span className="text-zinc-600 text-xs">&bull;</span>
               <a
                 href={groupSources[0].url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-indigo-400 hover:text-indigo-300 transition-colors"
+                className="text-indigo-400 hover:text-indigo-300 transition-colors truncate"
               >
                 {label}
               </a>
               {groupSources.length > 1 && (
-                <span className="text-zinc-600 text-xs">
+                <span className="text-zinc-600 text-xs shrink-0">
                   &times;{groupSources.length}
                 </span>
               )}
@@ -301,7 +315,7 @@ function SourcesList({ sources }) {
         {hasMore && (
           <button
             onClick={() => setShowAll(!showAll)}
-            className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer pt-2 block"
+            className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer pt-3 block"
           >
             {showAll ? 'Show fewer' : `Show all ${groups.length} sources`}
           </button>
@@ -315,11 +329,12 @@ function ResultsDashboard({ result }) {
   if (!result) return null;
 
   const colors = SCORE_COLORS[result.overall_score] || SCORE_COLORS.Unsupported;
+  const verdict = SCORE_VERDICTS[result.overall_score] || '';
 
   return (
     <div className="space-y-8">
       {/* Original Claim */}
-      <div className="bg-zinc-800/30 border border-zinc-800 rounded-lg p-5">
+      <div className="card-glow bg-zinc-900/40 border border-zinc-800 rounded-xl p-6">
         <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">
           Claim Under Review
         </p>
@@ -328,16 +343,26 @@ function ResultsDashboard({ result }) {
         </p>
       </div>
 
-      {/* Overall Score */}
-      <div className={`border rounded-lg p-5 ${colors.bg} ${colors.border}`}>
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">
+      {/* Overall Score — Epistemic Health */}
+      <div
+        className={`border rounded-xl p-6 ${colors.border}`}
+        style={{
+          background: `linear-gradient(135deg, ${colors.glow} 0%, rgba(24, 24, 27, 0.8) 100%)`,
+        }}
+      >
+        <div className="flex items-start justify-between gap-6">
+          <div className="flex-1">
+            <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
               Epistemic Health
             </p>
-            <p className="text-zinc-300 text-base leading-relaxed max-w-xl">
+            <p className="text-zinc-300 text-base leading-relaxed max-w-xl mb-3">
               {result.summary}
             </p>
+            {verdict && (
+              <p className={`text-sm font-medium ${colors.text} italic`}>
+                {verdict}
+              </p>
+            )}
           </div>
           <ScoreBadge score={result.overall_score} />
         </div>
@@ -348,7 +373,7 @@ function ResultsDashboard({ result }) {
         <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">
           Sub-claims ({result.sub_claims?.length || 0})
         </h3>
-        <div className="space-y-2">
+        <div className="space-y-3">
           {result.sub_claims?.map((sc, i) => (
             <SubClaimCard key={i} subClaim={sc} index={i} />
           ))}
@@ -408,27 +433,27 @@ export default function App() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
       {/* Header */}
-      <header className="border-b border-zinc-800 px-6 py-4 shrink-0">
+      <header className="border-b border-zinc-800/80 px-6 py-4 shrink-0">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-sm">
-              EA
+            <span className="text-2xl" role="img" aria-label="Owl">🦉</span>
+            <div>
+              <h1 className="text-lg font-semibold text-zinc-100">
+                Epistemic Auditor
+              </h1>
+              <p className="text-xs text-zinc-500 italic">
+                What would Socrates ask?
+              </p>
             </div>
-            <h1 className="text-lg font-semibold text-zinc-100">
-              Epistemic Auditor
-            </h1>
           </div>
-          <p className="text-xs text-zinc-600 hidden sm:block">
-            Stress-test any claim. See the evidence.
-          </p>
         </div>
       </header>
 
       {/* Main layout */}
       <div className="flex-1 flex min-h-0">
         {/* Content area */}
-        <main className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-3xl mx-auto space-y-8">
+        <main className="flex-1 overflow-y-auto p-6 lg:p-8">
+          <div className="max-w-3xl mx-auto space-y-10">
             <ClaimInput
               claim={claim}
               setClaim={setClaim}
@@ -437,7 +462,7 @@ export default function App() {
             />
 
             {error && (
-              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-red-400 text-sm">
+              <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-400 text-sm">
                 {error}
               </div>
             )}
@@ -450,14 +475,14 @@ export default function App() {
           </div>
         </main>
 
-        {/* Reasoning Log sidebar */}
-        <aside className="w-80 border-l border-emerald-900/20 bg-zinc-950 hidden lg:flex flex-col shrink-0">
-          <ReasoningLog thoughts={thoughts} status={loading ? status : ''} active={loading} />
+        {/* Socratic Process sidebar */}
+        <aside className="w-80 border-l border-emerald-900/15 bg-zinc-950 hidden lg:flex flex-col shrink-0">
+          <SocraticProcess thoughts={thoughts} status={loading ? status : ''} active={loading} />
         </aside>
       </div>
 
       {/* Footer */}
-      <footer className="border-t border-zinc-800 px-6 py-3 text-center shrink-0">
+      <footer className="border-t border-zinc-800/60 px-6 py-3 text-center shrink-0">
         <p className="text-xs text-zinc-600">
           Built with Gemini 3 &middot; Epistemic Auditor v0.1
         </p>
@@ -465,8 +490,8 @@ export default function App() {
 
       {/* Mobile reasoning log */}
       {loading && thoughts.length > 0 && (
-        <div className="lg:hidden fixed bottom-4 right-4 bg-zinc-900 border border-emerald-900/30 rounded-lg p-3 max-w-xs shadow-xl">
-          <p className="text-[10px] text-emerald-500/70 font-mono font-medium mb-1">Latest thought:</p>
+        <div className="lg:hidden fixed bottom-4 right-4 bg-zinc-900 border border-emerald-900/30 rounded-xl p-3 max-w-xs shadow-xl">
+          <p className="text-[10px] text-emerald-500/70 font-mono font-medium mb-1">Socratic Process:</p>
           <p className="text-[11px] text-emerald-300/50 font-mono line-clamp-3">
             {thoughts[thoughts.length - 1].text}
           </p>

@@ -21,6 +21,28 @@
   50% { opacity: 0; }
 }
 
+@keyframes orb-pulse {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 6px 2px rgba(52, 211, 153, 0.4);
+  }
+  50% {
+    opacity: 0.4;
+    box-shadow: 0 0 12px 4px rgba(52, 211, 153, 0.2);
+  }
+}
+
+@keyframes card-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .thought-slide-in {
   animation: thought-slide-in 0.3s ease-out both;
 }
@@ -31,4 +53,38 @@
 
 .animate-cursor-blink {
   animation: cursor-blink 1s step-end infinite;
+}
+
+.animate-orb-pulse {
+  animation: orb-pulse 2s ease-in-out infinite;
+}
+
+.card-fade-in {
+  animation: card-fade-in 0.4s ease-out both;
+}
+
+/* Subtle card hover glow */
+.card-glow {
+  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+.card-glow:hover {
+  box-shadow: 0 0 20px -4px rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+/* Example claim card hover */
+.claim-card-glow {
+  transition: box-shadow 0.3s ease, border-color 0.3s ease, background-color 0.3s ease;
+}
+.claim-card-glow:hover {
+  box-shadow: 0 0 24px -4px rgba(99, 102, 241, 0.2), 0 0 8px -2px rgba(52, 211, 153, 0.1);
+}
+
+/* Premium textarea */
+.textarea-premium {
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+.textarea-premium:focus {
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2), 0 0 16px -4px rgba(99, 102, 241, 0.3);
 }

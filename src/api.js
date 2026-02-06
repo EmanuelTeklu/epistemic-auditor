@@ -17,6 +17,21 @@ function getClient() {
   return ai;
 }
 
+// Extract real URL from vertexaisearch redirect URLs
+function extractRealUrl(url) {
+  try {
+    const u = new URL(url);
+    if (u.hostname === 'vertexaisearch.cloud.google.com' && u.pathname.startsWith('/grounding-api-redirect/')) {
+      const encoded = u.pathname.slice('/grounding-api-redirect/'.length);
+      const decoded = decodeURIComponent(encoded);
+      if (decoded.startsWith('http')) {
+        return decoded;
+      }
+    }
+  } catch { /* invalid URL */ }
+  return url;
+}
+
 const RESEARCH_SYSTEM_PROMPT = `You are an epistemic auditor. Given a claim, you must:
 
 1. Decompose the claim into 2-4 distinct, testable sub-claims.
@@ -132,21 +147,28 @@ export async function runAudit(claim, { onThought, onStatus }) {
     throw new Error('Failed to parse structured response. Raw: ' + jsonText?.slice(0, 200));
   }
 
-  // Build deduplicated sources with titles from grounding metadata
+  // Build deduplicated sources, resolving redirect URLs to real domains
   const seen = new Set();
   const sources = [];
+  let sourceIndex = 0;
   for (const s of groundingSources) {
-    if (!seen.has(s.url)) {
-      seen.add(s.url);
-      sources.push(s);
+    const realUrl = extractRealUrl(s.url);
+    if (!seen.has(realUrl)) {
+      seen.add(realUrl);
+      sourceIndex++;
+      let title = '';
+      try { title = new URL(realUrl).hostname.replace(/^www\./, ''); } catch { /* ignore */ }
+      sources.push({ url: realUrl, title: title || `Source ${sourceIndex}` });
     }
   }
   for (const url of (result.source_urls || [])) {
-    if (url && !seen.has(url)) {
-      seen.add(url);
+    const realUrl = extractRealUrl(url || '');
+    if (realUrl && !seen.has(realUrl)) {
+      seen.add(realUrl);
+      sourceIndex++;
       let title = '';
-      try { title = new URL(url).hostname.replace(/^www\./, ''); } catch {}
-      sources.push({ url, title });
+      try { title = new URL(realUrl).hostname.replace(/^www\./, ''); } catch { /* ignore */ }
+      sources.push({ url: realUrl, title: title || `Source ${sourceIndex}` });
     }
   }
   result.sources = sources;
