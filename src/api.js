@@ -58,7 +58,7 @@ export async function runAudit(claim, { onThought, onStatus }) {
   onStatus('Starting research with Google Search grounding...');
 
   let groundedText = '';
-  let groundingUrls = [];
+  let groundingSources = [];
 
   const stream = await client.models.generateContentStream({
     model: MODEL,
@@ -88,12 +88,12 @@ export async function runAudit(claim, { onThought, onStatus }) {
         }
       }
     }
-    // Collect grounding URLs from metadata
+    // Collect grounding sources (url + title/domain) from metadata
     const gm = candidate?.groundingMetadata;
     if (gm?.groundingChunks) {
       for (const gc of gm.groundingChunks) {
         if (gc.web?.uri) {
-          groundingUrls.push(gc.web.uri);
+          groundingSources.push({ url: gc.web.uri, title: gc.web.title || '' });
         }
       }
     }
@@ -132,12 +132,25 @@ export async function runAudit(claim, { onThought, onStatus }) {
     throw new Error('Failed to parse structured response. Raw: ' + jsonText?.slice(0, 200));
   }
 
-  // Merge grounding URLs into source_urls
-  const allUrls = new Set([
-    ...(result.source_urls || []),
-    ...groundingUrls,
-  ]);
-  result.source_urls = [...allUrls].filter(Boolean);
+  // Build deduplicated sources with titles from grounding metadata
+  const seen = new Set();
+  const sources = [];
+  for (const s of groundingSources) {
+    if (!seen.has(s.url)) {
+      seen.add(s.url);
+      sources.push(s);
+    }
+  }
+  for (const url of (result.source_urls || [])) {
+    if (url && !seen.has(url)) {
+      seen.add(url);
+      let title = '';
+      try { title = new URL(url).hostname.replace(/^www\./, ''); } catch {}
+      sources.push({ url, title });
+    }
+  }
+  result.sources = sources;
+  result.source_urls = sources.map(s => s.url);
 
   onStatus('Audit complete.');
   return result;

@@ -18,19 +18,6 @@ const CONFIDENCE_COLORS = {
 
 // --- URL utilities ---
 
-function extractRealUrl(url) {
-  try {
-    if (url.includes('vertexaisearch.cloud.google.com')) {
-      const parsed = new URL(url);
-      const realUrl = parsed.searchParams.get('url');
-      if (realUrl) return realUrl;
-    }
-    return url;
-  } catch {
-    return url;
-  }
-}
-
 function getDomain(url) {
   try {
     return new URL(url).hostname.replace(/^www\./, '');
@@ -270,64 +257,53 @@ function SubClaimCard({ subClaim, index }) {
   );
 }
 
-function SourcesList({ urls }) {
+function SourcesList({ sources }) {
   const [showAll, setShowAll] = useState(false);
 
-  const realUrls = [...new Set(urls.map(extractRealUrl))];
-
-  // Group by domain, sorted by frequency
-  const domainMap = new Map();
-  for (const url of realUrls) {
-    const domain = getDomain(url);
-    if (!domainMap.has(domain)) domainMap.set(domain, []);
-    domainMap.get(domain).push(url);
+  // Group by title (domain name from grounding metadata), sorted by frequency
+  const groupMap = new Map();
+  for (const source of sources) {
+    const key = source.title || getDomain(source.url);
+    if (!groupMap.has(key)) groupMap.set(key, []);
+    groupMap.get(key).push(source);
   }
-  const groups = [...domainMap.entries()].sort((a, b) => b[1].length - a[1].length);
+  const groups = [...groupMap.entries()].sort((a, b) => b[1].length - a[1].length);
 
   const TOP = 8;
-  let count = 0;
-  const visibleGroups = [];
-  for (const [domain, domainUrls] of groups) {
-    if (!showAll && count >= TOP) break;
-    const slice = showAll ? domainUrls : domainUrls.slice(0, TOP - count);
-    if (slice.length > 0) {
-      visibleGroups.push([domain, slice]);
-      count += slice.length;
-    }
-  }
-  const hasMore = realUrls.length > TOP;
+  const visible = showAll ? groups : groups.slice(0, TOP);
+  const hasMore = groups.length > TOP;
 
   return (
     <div>
       <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">
-        Sources ({realUrls.length})
+        Sources ({sources.length})
       </h3>
-      <div className="bg-zinc-800/30 border border-zinc-800 rounded-lg p-4 space-y-3">
-        {visibleGroups.map(([domain, domainUrls]) => (
-          <div key={domain}>
-            <p className="text-[11px] text-zinc-600 uppercase tracking-wider mb-1">{domain}</p>
-            <ul className="space-y-1 pl-2">
-              {domainUrls.map((url, i) => (
-                <li key={i} className="text-sm truncate">
-                  <a
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-indigo-400 hover:text-indigo-300 transition-colors"
-                  >
-                    {domain}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
+      <div className="bg-zinc-800/30 border border-zinc-800 rounded-lg p-4">
+        <ul className="space-y-1.5">
+          {visible.map(([label, groupSources]) => (
+            <li key={label} className="text-sm flex items-center gap-2">
+              <a
+                href={groupSources[0].url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-indigo-400 hover:text-indigo-300 transition-colors"
+              >
+                {label}
+              </a>
+              {groupSources.length > 1 && (
+                <span className="text-zinc-600 text-xs">
+                  &times;{groupSources.length}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
         {hasMore && (
           <button
             onClick={() => setShowAll(!showAll)}
-            className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer pt-1"
+            className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer pt-2 block"
           >
-            {showAll ? 'Show fewer' : `Show all ${realUrls.length} sources`}
+            {showAll ? 'Show fewer' : `Show all ${groups.length} sources`}
           </button>
         )}
       </div>
@@ -380,8 +356,8 @@ function ResultsDashboard({ result }) {
       </div>
 
       {/* Sources */}
-      {result.source_urls?.length > 0 && (
-        <SourcesList urls={result.source_urls} />
+      {result.sources?.length > 0 && (
+        <SourcesList sources={result.sources} />
       )}
     </div>
   );
