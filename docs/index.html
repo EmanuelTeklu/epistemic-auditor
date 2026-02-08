@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Epistemic Auditor — Frontier Calibration for Claims</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config={darkMode:'class',theme:{extend:{colors:{surface:'#18181b',card:'#27272a',accent:'#10b981',warn:'#eab308',border:'#3f3f46'}}}}</script>
+<style>
+@keyframes pulse-dot{0%,100%{opacity:.3}50%{opacity:1}}
+.dot-anim span{animation:pulse-dot 1.4s infinite}
+.dot-anim span:nth-child(2){animation-delay:.2s}
+.dot-anim span:nth-child(3){animation-delay:.4s}
+.fade-in{animation:fadeIn .3s ease-in}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body class="bg-surface text-zinc-100 min-h-screen flex flex-col">
+
+<!-- Settings Modal -->
+<div id="settingsModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+ <div class="bg-card border border-border rounded-xl p-6 w-full max-w-md mx-4">
+  <h2 class="text-lg font-semibold mb-3">Settings</h2>
+  <label class="block text-sm text-zinc-400 mb-1">Gemini API Key</label>
+  <input id="apiKeyInput" type="password" placeholder="Enter your Gemini API key" class="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm mb-1 focus:outline-none focus:ring-2 focus:ring-accent">
+  <p class="text-xs text-zinc-500 mb-4">Stored in memory only. Never saved to disk or localStorage.</p>
+  <div class="flex gap-2 justify-end">
+   <button onclick="closeSettings()" class="px-4 py-2 text-sm rounded-lg border border-border hover:bg-zinc-700">Cancel</button>
+   <button onclick="saveKey()" class="px-4 py-2 text-sm rounded-lg bg-accent text-black font-medium hover:bg-emerald-400">Save</button>
+  </div>
+ </div>
+</div>
+
+<!-- Header -->
+<header class="border-b border-border px-4 py-3 flex items-center justify-between">
+ <div>
+  <h1 class="text-xl font-bold tracking-tight">Epistemic Auditor</h1>
+  <p class="text-xs text-zinc-500">Frontier Calibration for Claims</p>
+ </div>
+ <button onclick="openSettings()" class="text-sm px-3 py-1.5 rounded-lg border border-border hover:bg-zinc-700 flex items-center gap-1.5">
+  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>
+  API Key
+ </button>
+</header>
+
+<!-- Main Layout -->
+<div class="flex-1 flex flex-col lg:flex-row overflow-hidden">
+
+<!-- Main Content -->
+<main class="flex-1 overflow-y-auto p-4 md:p-6">
+ <!-- Input Section -->
+ <div id="inputSection" class="max-w-2xl mx-auto">
+  <label class="block text-sm font-medium text-zinc-400 mb-2">Paste a claim to audit</label>
+  <textarea id="claimInput" rows="3" placeholder="e.g. AI labs will achieve AGI before 2030" class="w-full bg-card border border-border rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-accent resize-none"></textarea>
+  <button onclick="submitClaim()" id="submitBtn" class="mt-3 w-full py-3 rounded-xl bg-accent text-black font-bold text-lg hover:bg-emerald-400 transition-colors">
+   SUBMIT FOR AUDIT
+  </button>
+
+  <!-- Examples -->
+  <div id="examplesSection" class="mt-6">
+   <p class="text-xs text-zinc-500 uppercase tracking-wider mb-3">Try an example</p>
+   <div class="space-y-2">
+    <button onclick="loadExample(0)" class="w-full text-left px-4 py-3 rounded-lg border border-border hover:border-accent/50 hover:bg-card transition-colors">
+     <span class="text-sm font-medium">"AI labs will achieve AGI before 2030"</span>
+     <span class="block text-xs text-zinc-500 mt-0.5">Hype claim decomposition</span>
+    </button>
+    <button onclick="loadExample(1)" class="w-full text-left px-4 py-3 rounded-lg border border-border hover:border-accent/50 hover:bg-card transition-colors">
+     <span class="text-sm font-medium">"mRNA vaccine technology will be used for cancer treatment by 2027"</span>
+     <span class="block text-xs text-zinc-500 mt-0.5">Scientific frontier mapping</span>
+    </button>
+    <button onclick="loadExample(2)" class="w-full text-left px-4 py-3 rounded-lg border border-border hover:border-accent/50 hover:bg-card transition-colors">
+     <span class="text-sm font-medium">"The US federal debt-to-GDP ratio will trigger a fiscal crisis by 2030"</span>
+     <span class="block text-xs text-zinc-500 mt-0.5">Policy analysis</span>
+    </button>
+   </div>
+  </div>
+ </div>
+
+ <!-- Loading -->
+ <div id="loadingSection" class="hidden max-w-2xl mx-auto text-center py-12">
+  <div class="dot-anim text-3xl text-accent mb-3"><span>&#9679;</span> <span>&#9679;</span> <span>&#9679;</span></div>
+  <p id="loadingText" class="text-zinc-400 text-sm">Decomposing claim into sub-claims...</p>
+ </div>
+
+ <!-- Results -->
+ <div id="resultsSection" class="hidden max-w-3xl mx-auto">
+  <button onclick="resetUI()" class="text-sm text-zinc-500 hover:text-zinc-300 mb-4 flex items-center gap-1">&larr; New claim</button>
+  <h2 id="auditedClaim" class="text-lg font-semibold mb-4 border-l-4 border-accent pl-3"></h2>
+  <!-- Conflict Banner -->
+  <div id="conflictBanner" class="hidden mb-4 p-3 rounded-lg bg-yellow-900/30 border border-warn/40 text-warn text-sm"></div>
+  <!-- Sub-claim cards -->
+  <div id="cardsContainer" class="space-y-4"></div>
+ </div>
+</main>
+
+<!-- Socratic Sidebar -->
+<aside id="sidebar" class="hidden lg:block w-80 border-l border-border overflow-y-auto bg-card/50">
+ <div class="p-4">
+  <h3 class="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">Socratic Process</h3>
+  <div id="reasoningSteps" class="space-y-2 text-sm"></div>
+ </div>
+</aside>
+</div>
+
+<!-- Footer -->
+<footer class="border-t border-border px-4 py-2 text-center text-xs text-zinc-600">Built for superforecasters</footer>
+
+<script>
+let geminiApiKey = '';
+const GEMINI_MODEL = 'gemini-2.5-flash';
+
+// --- Settings ---
+function openSettings() { document.getElementById('settingsModal').classList.remove('hidden'); document.getElementById('apiKeyInput').value = geminiApiKey; }
+function closeSettings() { document.getElementById('settingsModal').classList.add('hidden'); }
+function saveKey() { geminiApiKey = document.getElementById('apiKeyInput').value.trim(); closeSettings(); }
+
+// --- Socratic Sidebar ---
+function addStep(text, type = 'info') {
+ const colors = { info: 'text-zinc-400', agent: 'text-accent', warn: 'text-warn', judge: 'text-indigo-400' };
+ const el = document.createElement('div');
+ el.className = `fade-in ${colors[type] || colors.info}`;
+ el.textContent = text;
+ document.getElementById('reasoningSteps').appendChild(el);
+ document.getElementById('sidebar').classList.remove('hidden');
+ el.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+
+function clearSteps() { document.getElementById('reasoningSteps').innerHTML = ''; }
+
+// --- UI State ---
+function showLoading(msg) {
+ document.getElementById('inputSection').classList.add('hidden');
+ document.getElementById('resultsSection').classList.add('hidden');
+ document.getElementById('loadingSection').classList.remove('hidden');
+ document.getElementById('loadingText').textContent = msg;
+}
+
+function showResults() {
+ document.getElementById('loadingSection').classList.add('hidden');
+ document.getElementById('resultsSection').classList.remove('hidden');
+}
+
+function resetUI() {
+ document.getElementById('inputSection').classList.remove('hidden');
+ document.getElementById('resultsSection').classList.add('hidden');
+ document.getElementById('loadingSection').classList.add('hidden');
+ document.getElementById('conflictBanner').classList.add('hidden');
+ document.getElementById('cardsContainer').innerHTML = '';
+ clearSteps();
+}
+
+// --- Render ---
+function renderCards(data) {
+ document.getElementById('auditedClaim').textContent = data.claim;
+ const container = document.getElementById('cardsContainer');
+ container.innerHTML = '';
+ data.subClaims.forEach((sc, i) => {
+  const card = document.createElement('div');
+  card.className = 'fade-in bg-card border border-border rounded-xl p-4';
+  card.style.animationDelay = `${i * 0.1}s`;
+  card.innerHTML = `
+   <h3 class="font-semibold mb-3 flex items-start gap-2"><span class="text-accent font-mono text-xs mt-1">${i + 1}</span>${sc.title}</h3>
+   <div class="grid md:grid-cols-2 gap-3">
+    <div class="bg-emerald-950/30 rounded-lg p-3">
+     <h4 class="text-xs font-semibold text-emerald-400 uppercase mb-2">Evidence For</h4>
+     <ul class="space-y-1">${sc.evidenceFor.map(e => `<li class="text-sm text-zinc-300">• ${e}</li>`).join('')}</ul>
+    </div>
+    <div class="bg-red-950/30 rounded-lg p-3">
+     <h4 class="text-xs font-semibold text-red-400 uppercase mb-2">Evidence Against</h4>
+     <ul class="space-y-1">${sc.evidenceAgainst.map(e => `<li class="text-sm text-zinc-300">• ${e}</li>`).join('')}</ul>
+    </div>
+   </div>`;
+  container.appendChild(card);
+ });
+ if (data.conflicts && data.conflicts.length) {
+  const banner = document.getElementById('conflictBanner');
+  banner.innerHTML = '<strong class="block mb-1">&#9888; Source Conflict Detected</strong>' + data.conflicts.map(c => `<p>${c}</p>`).join('');
+  banner.classList.remove('hidden');
+ }
+ showResults();
+}
+
+// --- Gemini API ---
+async function callGemini(claim) {
+ const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiApiKey}`;
+ const prompt = `You are an epistemic auditor. Decompose the following claim into 3-5 testable sub-claims. For each sub-claim, provide 2-3 pieces of evidence FOR and 2-3 pieces of evidence AGAINST. Also identify any source conflicts where evidence contradicts across sub-claims.
+
+Respond ONLY with valid JSON in this exact format:
+{"claim":"<original claim>","subClaims":[{"title":"<sub-claim>","evidenceFor":["..."],"evidenceAgainst":["..."]}],"conflicts":["<description of conflict>"]}
+
+Claim: "${claim}"`;
+
+ addStep('Deconstructor Agent: decomposing claim into sub-claims...', 'agent');
+ const res = await fetch(url, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+   contents: [{ parts: [{ text: prompt }] }],
+   generationConfig: { temperature: 0.7, responseMimeType: 'application/json' },
+   thinkingConfig: { thinkingLevel: 'HIGH' }
+  })
+ });
+ if (!res.ok) { const err = await res.text(); throw new Error(`API ${res.status}: ${err}`); }
+ addStep('Researcher Agent: mapping evidence landscape...', 'agent');
+ const json = await res.json();
+ const text = json.candidates?.[0]?.content?.parts?.filter(p => p.text).map(p => p.text).join('') || '';
+ addStep('Judge Agent: evaluating source conflicts...', 'judge');
+ return JSON.parse(text);
+}
+
+// --- Submit ---
+async function submitClaim() {
+ const claim = document.getElementById('claimInput').value.trim();
+ if (!claim) return;
+ clearSteps();
+ showLoading('Decomposing claim into sub-claims...');
+ addStep(`Claim received: "${claim.slice(0, 80)}..."`, 'info');
+
+ if (!geminiApiKey) {
+  addStep('No API key — loading mock analysis...', 'warn');
+  await fakePause(600);
+  addStep('Deconstructor Agent: decomposing claim...', 'agent');
+  await fakePause(500);
+  addStep('Researcher Agent: mapping evidence...', 'agent');
+  await fakePause(400);
+  addStep('Judge Agent: resolving conflicts...', 'judge');
+  await fakePause(300);
+  const mock = getMockForClaim(claim);
+  renderCards(mock || buildGenericMock(claim));
+  return;
+ }
+
+ try {
+  const data = await callGemini(claim);
+  addStep('Analysis complete.', 'info');
+  renderCards(data);
+ } catch (e) {
+  addStep(`Error: ${e.message}`, 'warn');
+  showLoading('API error — falling back to mock data...');
+  await fakePause(800);
+  renderCards(getMockForClaim(claim) || buildGenericMock(claim));
+ }
+}
+
+function fakePause(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// --- Examples ---
+const EXAMPLES = [
+ "AI labs will achieve AGI before 2030",
+ "mRNA vaccine technology will be used for cancer treatment by 2027",
+ "The US federal debt-to-GDP ratio will trigger a fiscal crisis by 2030"
+];
+
+function loadExample(i) {
+ document.getElementById('claimInput').value = EXAMPLES[i];
+ submitClaim();
+}
+
+// --- Mock Data ---
+const MOCK_DATA = {
+ "AI labs will achieve AGI before 2030": {
+  claim: "AI labs will achieve AGI before 2030",
+  subClaims: [
+   { title: "Current LLM scaling trends will continue yielding capability gains through 2030",
+     evidenceFor: ["GPT-4 to Gemini 2 showed consistent capability jumps with scale", "Compute investment is doubling yearly across major labs", "Novel architectures (MoE, SSM) are unlocking new efficiency frontiers"],
+     evidenceAgainst: ["Scaling laws show diminishing returns on benchmarks past certain thresholds", "Data scarcity is becoming a binding constraint — synthetic data quality is unproven", "Energy and chip supply constraints may cap effective compute growth"] },
+   { title: "There exists a shared, operationalizable definition of AGI that labs are targeting",
+     evidenceFor: ["DeepMind published a 6-level AGI framework in 2023", "OpenAI has internal AGI milestones tied to economic value generation", "Benchmarks like ARC-AGI provide measurable goalposts"],
+     evidenceAgainst: ["No two labs agree on what AGI means — definitions range from 'PhD-level reasoning' to 'full autonomy'", "Moving goalposts: tasks once considered AGI-level are reclassified after being solved", "Consciousness and generality are philosophical, not engineering, problems"] },
+   { title: "Frontier labs have sufficient funding and talent to sustain the pace required",
+     evidenceFor: ["OpenAI, Anthropic, Google, and xAI have raised $50B+ combined since 2023", "Top ML talent is concentrated in ~5 organizations with strong retention", "Government funding (CHIPS Act, EU AI programs) adds tailwind"],
+     evidenceAgainst: ["Investor patience may not survive another 5 years without ROI", "Regulatory pressure (EU AI Act, US executive orders) could slow deployment", "Key researchers have left major labs citing safety concerns, fragmenting talent"] },
+   { title: "Safety and alignment will not become a blocking constraint before 2030",
+     evidenceFor: ["RLHF and constitutional AI methods are improving alignment iteratively", "Major labs have committed to pre-deployment safety testing", "Interpretability research is accelerating with sparse autoencoders and circuit analysis"],
+     evidenceAgainst: ["Alignment tax may grow nonlinearly as capabilities increase", "No lab has demonstrated robust alignment for systems smarter than their creators", "A single high-profile AI incident could trigger moratoriums"] }
+  ],
+  conflicts: [
+   "Sub-claim 1 assumes scaling will continue, but sub-claim 3's evidence against notes funding may dry up — these create a contradiction about whether the necessary compute investment will materialize.",
+   "Sub-claim 2 notes there is no agreed AGI definition, which undermines sub-claim 1's evidence that 'capability gains' are meaningful progress toward AGI."
+  ]
+ },
+ "mRNA vaccine technology will be used for cancer treatment by 2027": {
+  claim: "mRNA vaccine technology will be used for cancer treatment by 2027",
+  subClaims: [
+   { title: "mRNA platforms can effectively encode tumor-specific neoantigens",
+     evidenceFor: ["Moderna's mRNA-4157 (V940) showed 44% reduction in melanoma recurrence in Phase 2b trials (2023)", "BioNTech's individualized neoantigen therapy BNT122 entered Phase 2 trials for multiple cancer types", "mRNA manufacturing can produce personalized vaccines in under 6 weeks from biopsy"],
+     evidenceAgainst: ["Tumor heterogeneity means neoantigen targets may miss resistant subclones", "Immunosuppressive tumor microenvironment may neutralize mRNA-induced T-cell responses", "Cold chain requirements limit deployment outside major medical centers"] },
+   { title: "Regulatory pathways will allow approval by 2027",
+     evidenceFor: ["FDA granted Breakthrough Therapy designation to mRNA-4157 in combination with Keytruda", "COVID-era regulatory infrastructure created precedent for accelerated mRNA review", "Oncology has established accelerated approval pathways based on surrogate endpoints"],
+     evidenceAgainst: ["Phase 3 trials for mRNA-4157 won't report until 2026 at earliest", "Personalized therapies face novel manufacturing quality challenges for regulators", "Combination therapy approval requires disentangling mRNA contribution from checkpoint inhibitor effects"] },
+   { title: "Clinical efficacy will generalize beyond melanoma to other solid tumors",
+     evidenceFor: ["BioNTech has active trials in pancreatic, colorectal, and lung cancers", "The mRNA mechanism (T-cell priming) is tumor-agnostic in principle", "Early pancreatic cancer data showed immune response in 8 of 16 patients"],
+     evidenceAgainst: ["Melanoma is unusually immunogenic — results may not transfer to 'cold' tumors", "Pancreatic and brain cancers have physical barriers to immune cell infiltration", "Historical pattern: promising cancer immunotherapy results in melanoma often fail to generalize"] },
+   { title: "Cost and manufacturing scale will support clinical deployment by 2027",
+     evidenceFor: ["Moderna and BioNTech have existing GMP mRNA manufacturing at scale from COVID", "Per-patient costs are projected at $50-100K, comparable to existing immunotherapies", "Automated neoantigen prediction pipelines are reducing computational bottleneck"],
+     evidenceAgainst: ["Each vaccine is a unique product — batch-of-one manufacturing doesn't scale like traditional drugs", "Hospital infrastructure for tumor sequencing + vaccine ordering is not widely deployed", "Insurance coverage frameworks for personalized therapies remain undefined"] }
+  ],
+  conflicts: [
+   "Sub-claim 1 cites strong melanoma results as evidence, but sub-claim 3's evidence against warns that melanoma's high immunogenicity makes it a poor predictor for other cancers — the flagship evidence may be misleading about general efficacy.",
+   "Sub-claim 2 notes accelerated regulatory pathways, but sub-claim 4's evidence against highlights that batch-of-one manufacturing poses novel quality assurance challenges regulators haven't addressed — speed of approval may conflict with manufacturing readiness."
+  ]
+ },
+ "The US federal debt-to-GDP ratio will trigger a fiscal crisis by 2030": {
+  claim: "The US federal debt-to-GDP ratio will trigger a fiscal crisis by 2030",
+  subClaims: [
+   { title: "The debt-to-GDP ratio will continue rising significantly from current levels (~120%)",
+     evidenceFor: ["CBO projects debt-to-GDP reaching 166% by 2054 under current law", "Mandatory spending (Social Security, Medicare) is on autopilot growth trajectory", "Interest payments now exceed defense spending, creating a compounding debt spiral"],
+     evidenceAgainst: ["GDP growth could accelerate with AI productivity gains, improving the ratio", "Inflation has eroded real debt burden — nominal GDP growth outpaced debt growth in 2021-22", "Congress could pass fiscal reforms (the ratio is a policy choice, not an inevitability)"] },
+   { title: "There exists a definable threshold at which debt-to-GDP triggers a crisis",
+     evidenceFor: ["Reinhart-Rogoff research identified 90% as a historical slowdown threshold", "Bond vigilantes have historically punished countries exceeding peer debt levels (Greece, Italy)", "Rating agencies have already downgraded US debt (S&P 2011, Fitch 2023)"],
+     evidenceAgainst: ["Japan has sustained 260% debt-to-GDP for decades without a fiscal crisis", "The Reinhart-Rogoff 90% threshold was debunked due to spreadsheet errors and cherry-picked data", "The US dollar's reserve currency status provides unique borrowing privilege with no clear limit"] },
+   { title: "Rising interest rates will make debt servicing unsustainable",
+     evidenceFor: ["Net interest costs hit $659B in FY2023, projected to exceed $1T by 2026", "The average maturity of US debt is shortening, increasing rollover risk at higher rates", "Each 1% rate increase adds ~$300B in annual interest costs"],
+     evidenceAgainst: ["The Fed can lower rates if fiscal stress emerges, as it controls the yield curve", "Treasury can extend debt maturity to lock in current rates", "Real interest rates remain historically moderate — the 2022-24 spike may be transitory"] },
+   { title: "A US fiscal crisis would manifest as a sudden loss of market confidence (bond sell-off, dollar crash)",
+     evidenceFor: ["The 2023 UK gilt crisis showed that sovereign debt crises can materialize rapidly even in developed economies", "Foreign holdings of US Treasuries have declined from 34% to 24% over the past decade", "CDS spreads on US sovereign debt have widened since 2023"],
+     evidenceAgainst: ["US Treasuries remain the global safe haven — demand increases during crises, not decreases", "The Fed can act as buyer of last resort (QE), effectively preventing a bond market rout", "A US fiscal crisis would trigger a global flight to the dollar, paradoxically strengthening it"] }
+  ],
+  conflicts: [
+   "Sub-claim 3 argues rising rates make debt unsustainable, but sub-claim 4's evidence against notes the Fed can intervene as buyer of last resort — the crisis mechanism in sub-claim 3 is neutralized by the policy response in sub-claim 4, but at the cost of potential inflation.",
+   "Sub-claim 2 cites Reinhart-Rogoff and bond vigilantes as evidence for a crisis threshold, but also acknowledges Japan's 260% ratio without crisis — the historical precedent evidence directly contradicts itself across countries."
+  ]
+ }
+};
+
+function getMockForClaim(claim) {
+ for (const key of Object.keys(MOCK_DATA)) { if (claim.toLowerCase().includes(key.toLowerCase().slice(0, 20))) return MOCK_DATA[key]; }
+ return null;
+}
+
+function buildGenericMock(claim) {
+ return { claim, subClaims: [
+  { title: "The core factual premise is accurate", evidenceFor: ["Claim references real-world trends", "Supporting data exists in public sources"], evidenceAgainst: ["Key statistics may be cherry-picked", "Timeframe assumptions are unverified"] },
+  { title: "The causal mechanism proposed is plausible", evidenceFor: ["Similar causal chains have precedent", "Expert consensus partially supports this"], evidenceAgainst: ["Confounding variables are not addressed", "Correlation may be mistaken for causation"] },
+  { title: "The predicted timeline is realistic", evidenceFor: ["Reference class of similar events supports this window", "Current trajectory extrapolation aligns"], evidenceAgainst: ["Black swan events could accelerate or delay", "Base rate for accurate timeline predictions is low"] }
+ ], conflicts: ["The evidence supporting the causal mechanism assumes conditions that the timeline evidence suggests may not hold — the speed of change required may exceed historical precedent."] };
+}
+</script>
+</body>
+</html>

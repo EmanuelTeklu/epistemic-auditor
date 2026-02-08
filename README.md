@@ -1,16 +1,96 @@
-# React + Vite
+# Epistemic Auditor — Frontier Calibration for Claims
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+> Decomposes complex claims into testable sub-claims, maps evidence, and resolves source conflicts.
 
-Currently, two official plugins are available:
+## Problem
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Viral misinformation relies on multi-layered half-truths. Simple true/false fact-checkers miss nuance. A claim like "AI labs will achieve AGI before 2030" bundles together scaling assumptions, definitional ambiguity, funding sustainability, and alignment risk — each with its own evidence landscape. Superforecasters need calibration tools, not verdict machines.
 
-## React Compiler
+## Solution
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Paste any claim → AI decomposes into sub-claims → searches evidence → flags where sources conflict → shows reasoning chain.
 
-## Expanding the ESLint configuration
+The Epistemic Auditor breaks complex claims into 3-5 independently testable sub-claims, maps evidence for and against each one, and highlights where the evidence *contradicts itself* across sub-claims. A Socratic Process sidebar shows the chain of reasoning as it happens, making the analysis transparent and auditable.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────┐
+│                   Claim Input                         │
+└───────────────────────┬──────────────────────────────┘
+                        │
+              ┌─────────▼─────────┐
+              │  Deconstructor    │  ThinkingLevel: HIGH
+              │  Agent            │  Decomposes into sub-claims
+              └─────────┬─────────┘
+                        │
+              ┌─────────▼─────────┐
+              │  Researcher       │  Google Search grounding
+              │  Agent            │  Maps evidence landscape
+              └─────────┬─────────┘
+                        │
+              ┌─────────▼─────────┐
+              │  Judge Agent      │  ThinkingLevel: LOW
+              │                   │  Resolves source conflicts
+              └─────────┬─────────┘
+                        │
+              ┌─────────▼─────────┐
+              │  Results + Source  │
+              │  Conflict Resolver│
+              └───────────────────┘
+```
+
+**Gemini orchestration pipeline:**
+- **Deconstructor Agent** — Uses ThinkingLevel.HIGH to perform Socratic deconstruction of the claim into independently testable sub-claims
+- **Researcher Agent** — Function Calling for Google Search grounding to map the evidence landscape for each sub-claim
+- **Judge Agent** — Uses ThinkingLevel.LOW for fast synthesis, identifies where evidence contradicts across sub-claims
+- **1M context window** — Full article ingestion for deep evidence analysis
+
+## Tech Stack
+
+- Single HTML file (340 lines)
+- Tailwind CSS via CDN
+- Gemini API (client-side, no backend)
+- Zero build step, zero dependencies
+- Dark mode, fully responsive
+
+## Setup
+
+```bash
+# Clone
+git clone https://github.com/EmanuelTeklu/epistemic-auditor.git
+cd epistemic-auditor
+
+# Option 1: Open the static app directly
+open docs/index.html
+
+# Option 2: Run the full React development app
+npm install
+npm run dev
+```
+
+**Quick start:** Open `docs/index.html` in your browser. Click any example claim to see a full analysis with mock data — no API key required.
+
+**Live mode:** Click the API Key button, enter your Gemini API key, and submit any claim for real-time AI analysis.
+
+## Target Users
+
+- **Superforecasters** — Calibrate predictions by seeing evidence both for and against each component of a claim
+- **Researchers** — Map the evidence landscape for complex scientific or policy claims
+- **Journalists** — Identify where sources conflict before publishing
+- **Policy analysts** — Decompose multi-layered policy claims into independently verifiable components
+
+## Screenshots
+
+<!-- Screenshot placeholder — replace with actual screenshot -->
+![Epistemic Auditor Screenshot](docs/screenshot.png)
+
+*The Epistemic Auditor analyzing "AI labs will achieve AGI before 2030" — showing sub-claim decomposition, evidence mapping, and source conflict detection.*
+
+## Live Demo
+
+See [DEPLOY-STATUS.md](DEPLOY-STATUS.md) for the live GitHub Pages URL.
+
+## License
+
+MIT
